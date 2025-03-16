@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# SPDX-License-Identifier: MIT-0
+
+set -euxo pipefail
+
+maybe_sudo=
+
+case "$OSTYPE" in
+    darwin*)
+    # Mac specific installations
+    if [[ "${EUID}" -eq 0 ]]; then
+      echo 'This script must NOT be run as root' >&2
+      exit 1
+    fi
+
+    # Download the drake source
+    curl -o drake.tar.gz https://drake-packages.csail.mit.edu/drake/nightly/drake-latest-mac-arm64.tar.gz
+    trap 'rm -f drake.tar.gz' EXIT
+    tar -xf drake.tar.gz -C $HOME
+    ;;
+
+    linux*)
+    # Ubuntu specific installations
+    if [[ "${EUID}" -ne 0 ]]; then
+      maybe_sudo=sudo
+    fi
+
+    ${maybe_sudo} apt-get update
+    ${maybe_sudo} apt-get install --no-install-recommends lsb-release
+
+    if [[ "$(lsb_release -sc)" != 'jammy' ]]; then
+      echo 'This script requires Ubuntu 22.04 (Jammy)' >&2
+      exit 3
+    fi
+
+    ${maybe_sudo} apt-get install --no-install-recommends $(cat <<EOF
+      ca-certificates
+      wget
+EOF
+    )
+
+    # Download the drake source
+    wget -O drake.tar.gz \
+      https://drake-packages.csail.mit.edu/drake/nightly/drake-latest-jammy.tar.gz
+    trap 'rm -f drake.tar.gz' EXIT
+    tar -xf drake.tar.gz -C $HOME
+
+    ${maybe_sudo} apt-get install --no-install-recommends $(cat <<EOF
+      python3-all-dev
+EOF
+    )
+    ;;
+esac
+
+# Show version for debugging; use echo for newline / readability.
+echo -e "\ndrake VERSION.TXT: $(cat $HOME/drake/share/doc/drake/VERSION.TXT)\n"
+
+# Install the source prereqs
+${maybe_sudo} ${HOME}/drake/share/drake/setup/install_prereqs
