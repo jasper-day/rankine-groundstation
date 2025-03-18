@@ -37,3 +37,9 @@ add_subdirectory(third_party)
 # main code lives here, including library definitions. Edit library definitions in src/cpp/CMakeLists.txt
 add_subdirectory(src/cpp)
 # add_subdirectory(tests)
+
+# Install pure-python files
+file(GLOB_RECURSE PYTHON_SOURCES "src/${SKBUILD_PROJECT_NAME}/*.py")
+file(GLOB_RECURSE PYTHON_STUBS "src/${SKBUILD_PROJECT_NAME}/*.pyi")
+
+install(FILES ${PYTHON_SOURCES} ${PYTHON_STUBS} DESTINATION ${SKBUILD_PROJECT_NAME})

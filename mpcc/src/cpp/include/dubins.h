@@ -64,7 +64,7 @@ class LineSegment final : public Segment<T> {
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(LineSegment);
 
   LineSegment() = default;
-  ~LineSegment() final;
+  ~LineSegment() = default;
 
   // Constructor with start and end points
   LineSegment(const drake::Vector2<T>& start_in,
@@ -115,7 +115,7 @@ class CircularSegment final : public Segment<T> {
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(CircularSegment);
 
   CircularSegment() = default;
-  ~CircularSegment() final;
+  ~CircularSegment() = default;
   // Constructor with all parameters
   CircularSegment(const drake::Vector2<T>& center_in, T radius_in, T dir_in,
                   T heading_in, T arclength_in)

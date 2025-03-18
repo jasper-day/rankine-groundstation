@@ -9,6 +9,7 @@ namespace pympcc {
 namespace py = pybind11;
 
 PYBIND11_MODULE(pydubins, m) {
+  m.doc() = "Python bindings for Dubins path planning";
   using T = double;
   // Bind the Segment base class
   py::class_<mpcc::dubins::Segment<T>,
