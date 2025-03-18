@@ -67,7 +67,8 @@ class LineSegment final : public Segment<T> {
   ~LineSegment() final;
 
   // Constructor with start and end points
-  LineSegment(const drake::Vector2<T>& start_in, const drake::Vector2<T>& end_in)
+  LineSegment(const drake::Vector2<T>& start_in,
+              const drake::Vector2<T>& end_in)
       : start_(start_in), end_(end_in) {}
 
   // Scalar converting copy constructor
@@ -116,8 +117,8 @@ class CircularSegment final : public Segment<T> {
   CircularSegment() = default;
   ~CircularSegment() final;
   // Constructor with all parameters
-  CircularSegment(const drake::Vector2<T>& center_in, T radius_in,
-                 T dir_in, T heading_in, T arclength_in)
+  CircularSegment(const drake::Vector2<T>& center_in, T radius_in, T dir_in,
+                  T heading_in, T arclength_in)
       : center_(center_in),
         radius_(radius_in),
         dir_(dir_in),
@@ -139,7 +140,9 @@ class CircularSegment final : public Segment<T> {
   drake::Vector2<T> start() const override;
   drake::Vector2<T> end() const override;
   T heading_start() const override { return heading_ + dir_ * M_PI / 2; }
-  T heading_end() const override { return heading_start() + dir_ * arclength_ / radius_; }
+  T heading_end() const override {
+    return heading_start() + dir_ * arclength_ / radius_;
+  }
   drake::Vector2<T> eval(T arclength) const override;
 
  private:
@@ -167,6 +170,10 @@ class DubinsPath {
   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(DubinsPath);
 
   DubinsPath() = default;
+
+  DubinsPath(std::vector<std::shared_ptr<Segment<T>>> segments_in)
+      : segments_(segments_in) {};
+
   ~DubinsPath() = default;
 
   // Scalar converting copy constructor
@@ -185,7 +192,7 @@ class DubinsPath {
   }
 
   /// Add a segment to the path
-  void add_segment(std::unique_ptr<Segment<T>> segment) {
+  void add_segment(std::shared_ptr<Segment<T>> segment) {
     segments_.push_back(std::move(segment));
   }
 
@@ -193,8 +200,8 @@ class DubinsPath {
   size_t num_segments() const { return segments_.size(); }
 
   /// Get a segment by index
-  const Segment<T>& get_segment(size_t index) const {
-    return *segments_[index];
+  const std::shared_ptr<Segment<T>> get_segment(size_t index) const {
+    return segments_[index];
   }
 
   // Declare friendship to enable scalar conversion
@@ -202,7 +209,7 @@ class DubinsPath {
   friend class DubinsPath;
 
  private:
-  std::vector<std::unique_ptr<Segment<T>>> segments_;
+  std::vector<std::shared_ptr<Segment<T>>> segments_;
 };
 
 }  // namespace dubins

@@ -24,7 +24,7 @@ PYBIND11_MODULE(pydubins, m) {
   // Bind the LineSegment class
   py::class_<mpcc::dubins::LineSegment<T>, mpcc::dubins::Segment<T>,
              std::shared_ptr<mpcc::dubins::LineSegment<T>>>(m, "LineSegment")
-      .def(py::init<>())
+      //   .def(py::init<>()) // no need for empty constructor
       .def(py::init<const drake::Vector2<T>&, const drake::Vector2<T>&>(),
            py::arg("start"), py::arg("end"))
       .def("path_coords", &mpcc::dubins::LineSegment<T>::path_coords)
@@ -39,7 +39,7 @@ PYBIND11_MODULE(pydubins, m) {
   py::class_<mpcc::dubins::CircularSegment<T>, mpcc::dubins::Segment<T>,
              std::shared_ptr<mpcc::dubins::CircularSegment<T>>>(
       m, "CircularSegment")
-      .def(py::init<>())
+      //   .def(py::init<>())
       .def(py::init<const drake::Vector2<T>&, T, T, T, T>(), py::arg("center"),
            py::arg("radius"), py::arg("dir"), py::arg("heading"),
            py::arg("arclength"))
@@ -54,6 +54,8 @@ PYBIND11_MODULE(pydubins, m) {
   // Bind the DubinsPath class
   py::class_<mpcc::dubins::DubinsPath<T>>(m, "DubinsPath")
       .def(py::init<>())
+      .def(py::init<std::vector<std::shared_ptr<mpcc::dubins::Segment<T>>>>(),
+           py::arg("segments"))
       .def("add_segment",
            [](mpcc::dubins::DubinsPath<T>& self,
               const std::shared_ptr<mpcc::dubins::Segment<T>>& segment) {
@@ -71,8 +73,7 @@ PYBIND11_MODULE(pydubins, m) {
              }
            })
       .def("num_segments", &mpcc::dubins::DubinsPath<T>::num_segments)
-      .def("get_segment", &mpcc::dubins::DubinsPath<T>::get_segment,
-           py::return_value_policy::reference_internal);
+      .def("get_segment", &mpcc::dubins::DubinsPath<T>::get_segment);
 }
 
 }  // namespace pympcc
