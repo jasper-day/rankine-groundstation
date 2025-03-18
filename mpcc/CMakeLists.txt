@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT-0
 
 cmake_minimum_required(VERSION 3.16)
-project(drake_cmake_installed)
+project(mpcc LANGUAGES CXX)
 
 # N.B. This is a temporary flag. It only really applies to Linux, as Mac
 # does not need X11.
@@ -11,13 +11,16 @@ include(CTest)
 
 find_package(drake CONFIG REQUIRED)
 
+if(DEFINED ENV{VIRTUAL_ENV})
+  set(Python3_ROOT_DIR $ENV{VIRTUAL_ENV})
+  message(STATUS "Using Python from virtual environment: $ENV{VIRTUAL_ENV}")
+endif()
+
 find_package(Python3 ${drake_PYTHON_VERSION} EXACT REQUIRED COMPONENTS Interpreter Development)
 
-execute_process(COMMAND ${Python3_EXECUTABLE}-config --exec-prefix
-  OUTPUT_VARIABLE PYTHON_EXEC_PREFIX
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-list(APPEND CMAKE_PREFIX_PATH "${PYTHON_EXEC_PREFIX}")
+if(DEFINED ENV{VIRTUAL_ENV})
+  list(APPEND CMAKE_PREFIX_PATH "$ENV{VIRTUAL_ENV}")
+endif()
 
 get_filename_component(DRAKE_PYTHONPATH
   "${drake_DIR}/../../python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/site-packages"
@@ -29,5 +32,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-add_subdirectory(src)
+# third party defines google test gtest
 add_subdirectory(third_party)
+# main code lives here, including library definitions. Edit library definitions in src/cpp/CMakeLists.txt
+add_subdirectory(src/cpp)
+# add_subdirectory(tests)

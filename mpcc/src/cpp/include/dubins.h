@@ -1,0 +1,209 @@
+#pragma once
+
+#include <memory>
+#include <vector>
+
+#include <drake/common/drake_copyable.h>
+#include <drake/common/eigen_types.h>
+
+namespace mpcc {
+namespace dubins {
+
+/**
+ * @brief Base class for Dubins path segments
+ */
+template <typename T>
+class Segment {
+ public:
+  Segment() = default;
+
+  virtual ~Segment() = default;
+
+  /// Path-relative coordinates of a point in NED coordinates
+  /// The first coordinate is the arclength and the second is normal distance
+  virtual drake::Vector2<T> path_coords(drake::Vector2<T> point) = 0;
+
+  /// The length of the segment
+  virtual T length() const = 0;
+
+  /// Starting point
+  virtual drake::Vector2<T> start() const = 0;
+
+  /// End point
+  virtual drake::Vector2<T> end() const = 0;
+
+  /// Tangent angle at start
+  virtual T heading_start() const = 0;
+
+  /// Tangent angle at end
+  virtual T heading_end() const = 0;
+
+  /// arclength -> location
+  virtual drake::Vector2<T> eval(T arclength) const = 0;
+
+ protected:
+  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(Segment);
+  // Scalar converting copy constructor
+  template <typename U>
+  explicit Segment(const Segment<U>& other) {}
+};
+
+/**
+ * @brief Straight line segment of Dubins path.
+ *
+ * Dubins paths are made up of straight lines and circular
+ * arcs. The straight lines are given by a start point and an
+ * endpoint.
+ * @todo we may want to add the height of the airplane later.
+ *
+ * @tparam T The scalar type of the path.
+ */
+template <typename T>
+class LineSegment final : public Segment<T> {
+ public:
+  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(LineSegment);
+
+  LineSegment() = default;
+  ~LineSegment() final;
+
+  // Constructor with start and end points
+  LineSegment(const drake::Vector2<T>& start_in, const drake::Vector2<T>& end_in)
+      : start_(start_in), end_(end_in) {}
+
+  // Scalar converting copy constructor
+  template <typename U>
+  explicit LineSegment(const LineSegment<U>& other)
+      : Segment<T>(other), start_(other.start_), end_(other.end_) {}
+
+  drake::Vector2<T> path_coords(drake::Vector2<T> point) override;
+  T length() const override;
+  drake::Vector2<T> start() const override { return start_; }
+  drake::Vector2<T> end() const override { return end_; }
+  T heading_start() const override;
+  T heading_end() const override;
+  drake::Vector2<T> eval(T arclength) const override;
+
+  template <typename U>
+  friend class LineSegment;
+
+ private:
+  drake::Vector2<T> start_;
+  drake::Vector2<T> end_;
+};
+
+/**
+ * @brief Curved segment of Dubins path.
+ *
+ * Dubins paths are made up of straight lines and circular arcs.
+ * The circular arc segments are given by the location of their center,
+ * the radius of the circle, the direction (1 for CCW, -1 for CW), the
+ * heading of the entry point (from the center of the circle), and the
+ * arclength travelled.
+ *
+ * See: Thomas J. Stastny, Adyasha Dash, and Roland Siegwart, "Nonlinear MPC for
+ * Fixed-Wing UAV Trajectory Tracking: Implementation and Flight Experiments,"
+ * in AIAA Guidance, Navigation, and Control Conference (AIAA Guidance,
+ * Navigation, and Control Conference, Grapevine, Texas: American Institute of
+ * Aeronautics and Astronautics, 2017), https://doi.org/10.2514/6.2017-1512.
+ *
+ * @tparam T the scalar type of the path
+ */
+template <typename T>
+class CircularSegment final : public Segment<T> {
+ public:
+  DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(CircularSegment);
+
+  CircularSegment() = default;
+  ~CircularSegment() final;
+  // Constructor with all parameters
+  CircularSegment(const drake::Vector2<T>& center_in, T radius_in,
+                 T dir_in, T heading_in, T arclength_in)
+      : center_(center_in),
+        radius_(radius_in),
+        dir_(dir_in),
+        heading_(heading_in),
+        arclength_(arclength_in) {}
+
+  // Scalar converting copy constructor
+  template <typename U>
+  explicit CircularSegment(const CircularSegment<U>& other)
+      : Segment<T>(other),
+        center_(other.center_),
+        radius_(other.radius_),
+        dir_(other.dir_),
+        heading_(other.heading_),
+        arclength_(other.arclength_) {}
+
+  drake::Vector2<T> path_coords(drake::Vector2<T> point) override;
+  T length() const override { return arclength_; }
+  drake::Vector2<T> start() const override;
+  drake::Vector2<T> end() const override;
+  T heading_start() const override { return heading_ + dir_ * M_PI / 2; }
+  T heading_end() const override { return heading_start() + dir_ * arclength_ / radius_; }
+  drake::Vector2<T> eval(T arclength) const override;
+
+ private:
+  drake::Vector2<T> center_;
+  T radius_;
+  T dir_;
+  T heading_;
+  T arclength_;
+};
+
+/**
+ * @brief Dubins path.
+ *
+ * Dubins paths are made up of straight lines and circular arcs.
+ * This implementation uses an ordered list of LineSegments and
+ * CircularSegments.
+ * A solver is given which enforces location and tangency constraints.
+ * This uses the Drake symbolic algebra package.
+ *
+ * @tparam T the scalar type of the path
+ */
+template <typename T>
+class DubinsPath {
+ public:
+  DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(DubinsPath);
+
+  DubinsPath() = default;
+  ~DubinsPath() = default;
+
+  // Scalar converting copy constructor
+  template <typename U>
+  explicit DubinsPath(const DubinsPath<U>& other) {
+    segments_.reserve(other.segments_.size());
+    for (const auto& segment : other.segments_) {
+      if (dynamic_cast<const LineSegment<U>*>(segment.get())) {
+        segments_.push_back(std::make_unique<LineSegment<T>>(
+            *dynamic_cast<const LineSegment<U>*>(segment.get())));
+      } else if (dynamic_cast<const CircularSegment<U>*>(segment.get())) {
+        segments_.push_back(std::make_unique<CircularSegment<T>>(
+            *dynamic_cast<const CircularSegment<U>*>(segment.get())));
+      }
+    }
+  }
+
+  /// Add a segment to the path
+  void add_segment(std::unique_ptr<Segment<T>> segment) {
+    segments_.push_back(std::move(segment));
+  }
+
+  /// Get the number of segments in the path
+  size_t num_segments() const { return segments_.size(); }
+
+  /// Get a segment by index
+  const Segment<T>& get_segment(size_t index) const {
+    return *segments_[index];
+  }
+
+  // Declare friendship to enable scalar conversion
+  template <typename U>
+  friend class DubinsPath;
+
+ private:
+  std::vector<std::unique_ptr<Segment<T>>> segments_;
+};
+
+}  // namespace dubins
+}  // namespace mpcc

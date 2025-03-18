@@ -7,15 +7,34 @@ authors = [
     { name = "Jasper Day", email = "jromanoday@gmail.com" }
 ]
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "numpy", "drake<0.1"
+]
 
-[project.scripts]
-mpcc = "mpcc:main"
+[[tool.uv.index]]
+# nightly packages
+name = "drake"
+url = "https://drake-packages.csail.mit.edu/whl/nightly/"
 
-[tool.scikit-build]
-minimum-version = "build-system.requires"
-build-dir = "build/{wheel_tag}"
+[tool.pip]
+extra-index-url = ["https://drake-packages.csail.mit.edu/whl/nightly/"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest", "scikit-build-core>=0.10", "pybind11"
+]
 
 [build-system]
 requires = ["scikit-build-core>=0.10", "pybind11"]
 build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+build-dir = "build"
+cmake.args = [
+    "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+]
+cmake.build-type = "Release"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
