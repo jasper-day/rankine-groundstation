@@ -25,9 +25,11 @@ PYBIND11_MODULE(pydubins, m) {
   // Bind the LineSegment class
   py::class_<mpcc::dubins::LineSegment<T>, mpcc::dubins::Segment<T>,
              std::shared_ptr<mpcc::dubins::LineSegment<T>>>(m, "LineSegment")
-      //   .def(py::init<>()) // no need for empty constructor
-      .def(py::init<const drake::Vector2<T>&, const drake::Vector2<T>&>(),
-           py::arg("start"), py::arg("end"))
+      .def(py::init([](const Eigen::Ref<const Eigen::Vector2d>& start,
+                      const Eigen::Ref<const Eigen::Vector2d>& end) {
+          return std::make_shared<mpcc::dubins::LineSegment<T>>(
+              drake::Vector2<T>(start), drake::Vector2<T>(end));
+      }), py::arg("start"), py::arg("end"))
       .def("path_coords", &mpcc::dubins::LineSegment<T>::path_coords)
       .def("length", &mpcc::dubins::LineSegment<T>::length)
       .def("start", &mpcc::dubins::LineSegment<T>::start)
@@ -40,10 +42,12 @@ PYBIND11_MODULE(pydubins, m) {
   py::class_<mpcc::dubins::CircularSegment<T>, mpcc::dubins::Segment<T>,
              std::shared_ptr<mpcc::dubins::CircularSegment<T>>>(
       m, "CircularSegment")
-      //   .def(py::init<>())
-      .def(py::init<const drake::Vector2<T>&, T, T, T, T>(), py::arg("center"),
-           py::arg("radius"), py::arg("dir"), py::arg("heading"),
-           py::arg("arclength"))
+      .def(py::init([](const Eigen::Ref<const Eigen::Vector2d>& center,
+                      T radius, T dir, T heading, T arclength) {
+          return std::make_shared<mpcc::dubins::CircularSegment<T>>(
+              drake::Vector2<T>(center), radius, dir, heading, arclength);
+      }), py::arg("center"), py::arg("radius"), py::arg("dir"),
+          py::arg("heading"), py::arg("arclength"))
       .def("path_coords", &mpcc::dubins::CircularSegment<T>::path_coords)
       .def("length", &mpcc::dubins::CircularSegment<T>::length)
       .def("start", &mpcc::dubins::CircularSegment<T>::start)

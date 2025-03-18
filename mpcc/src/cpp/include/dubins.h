@@ -145,6 +145,9 @@ class CircularSegment final : public Segment<T> {
   }
   drake::Vector2<T> eval(T arclength) const override;
 
+  template <typename U>
+  friend class CircularSegment;
+
  private:
   drake::Vector2<T> center_;
   T radius_;

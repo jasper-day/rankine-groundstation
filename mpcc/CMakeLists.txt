@@ -7,7 +7,6 @@ project(mpcc LANGUAGES CXX)
 # does not need X11.
 option(RUN_X11_TESTS "Run tests that require X11" OFF)
 
-include(CTest)
 
 find_package(drake CONFIG REQUIRED)
 
@@ -32,10 +31,40 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# third party defines google test gtest
-add_subdirectory(third_party)
+# Create dubins library
+add_library(dubins SHARED
+    src/cpp/lib/dubins.cc
+)
+
+target_include_directories(dubins
+    PUBLIC src/cpp/include
+    PUBLIC ${drake_INCLUDE_DIRS}
+)
+
+target_link_libraries(dubins PRIVATE drake::drake)
+
+# Add bindings
+find_package(pybind11 CONFIG REQUIRED)
+
+set(PYDUBINS_SOURCES src/cpp/bindings/dubins_py.cc src/cpp/lib/dubins.cc)
+
+pybind11_add_module(pydubins MODULE ${PYDUBINS_SOURCES})
+target_link_libraries(pydubins PRIVATE drake::drake dubins)
+target_include_directories(pydubins PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${drake_INCLUDE_DIRS}
+)
+
+# Set the output name to match the Python import
+set_target_properties(pydubins PROPERTIES
+    PREFIX ""
+    SUFFIX ".so"
+)
+
+install(TARGETS pydubins 
+  LIBRARY DESTINATION "${SKBUILD_PROJECT_NAME}")
+
 # main code lives here, including library definitions. Edit library definitions in src/cpp/CMakeLists.txt
-add_subdirectory(src/cpp)
 # add_subdirectory(tests)
 
 # Install pure-python files
@@ -43,3 +72,16 @@ file(GLOB_RECURSE PYTHON_SOURCES "src/${SKBUILD_PROJECT_NAME}/*.py")
 file(GLOB_RECURSE PYTHON_STUBS "src/${SKBUILD_PROJECT_NAME}/*.pyi")
 
 install(FILES ${PYTHON_SOURCES} ${PYTHON_STUBS} DESTINATION ${SKBUILD_PROJECT_NAME})
+
+# ---
+# testing
+
+if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+  include(CTest)
+endif()
+
+# third party defines google test gtest
+if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
+  add_subdirectory(third_party)
+  add_subdirectory(tests)
+endif()

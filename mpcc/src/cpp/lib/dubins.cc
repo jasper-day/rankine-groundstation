@@ -1,7 +1,9 @@
 #include "dubins.h"
-#include <drake/common/eigen_types.h>
-#include <drake/common/autodiff.h>
+
 #include <cmath>
+
+#include <drake/common/autodiff.h>
+#include <drake/common/eigen_types.h>
 
 namespace mpcc {
 namespace dubins {
@@ -17,16 +19,15 @@ template <typename T>
 T LineSegment<T>::heading_start() const {
   drake::Vector2<T> dir = end() - start();
   using std::atan2;
+  // slope of line with correct sign
   return atan2(dir.y(), dir.x());
 }
 
 template <typename T>
 T LineSegment<T>::heading_end() const {
+  // line segments are straight
   return heading_start();
 }
-
-
-
 
 template <typename T>
 drake::Vector2<T> LineSegment<T>::eval(T arclength) const {
@@ -51,27 +52,23 @@ drake::Vector2<T> LineSegment<T>::path_coords(drake::Vector2<T> point) {
 
 // Circular segment
 
-
 template <typename T>
 drake::Vector2<T> CircularSegment<T>::start() const {
-  using std::cos;
-  using std::sin;
-  return center_ + radius_ * drake::Vector2<T>(cos(heading_), sin(heading_));
+  return eval(T(0));
 }
 
 template <typename T>
 drake::Vector2<T> CircularSegment<T>::end() const {
-  using std::cos;
-  using std::sin;
-  return center_ + radius_ * drake::Vector2<T>(cos(heading_end()), sin(heading_end()));
+  return eval(arclength_);
 }
-
-
-
 
 template <typename T>
 drake::Vector2<T> CircularSegment<T>::eval(T arclength) const {
+  using std::clamp;
+  arclength = clamp(arclength, T(0), arclength_);
   T angle = heading_ + dir_ * arclength / radius_;
+  using std::cos;
+  using std::sin;
   return center_ + radius_ * drake::Vector2<T>(cos(angle), sin(angle));
 }
 
