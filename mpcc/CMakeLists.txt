@@ -42,6 +42,7 @@ target_include_directories(dubins
 )
 
 target_link_libraries(dubins PRIVATE drake::drake)
+target_link_directories(dubins PRIVATE ${drake_LIBRARY_DIRS})
 
 # Add bindings
 find_package(pybind11 CONFIG REQUIRED)
@@ -50,6 +51,7 @@ set(PYDUBINS_SOURCES src/cpp/bindings/dubins_py.cc src/cpp/lib/dubins.cc)
 
 pybind11_add_module(pydubins MODULE ${PYDUBINS_SOURCES})
 target_link_libraries(pydubins PRIVATE drake::drake dubins)
+target_link_directories(pydubins PRIVATE ${drake_LIBRARY_DIRS})
 target_include_directories(pydubins PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${drake_INCLUDE_DIRS}

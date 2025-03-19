@@ -1,6 +1,7 @@
 #include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <drake/common/trajectories/piecewise_constant_curvature_trajectory.h>
 
 #include "dubins.h"
 
@@ -10,6 +11,9 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(pydubins, m) {
   m.doc() = "Python bindings for Dubins path planning";
+
+  py::module::import("pydrake.trajectories");
+
   using T = double;
   // Bind the Segment base class
   py::class_<mpcc::dubins::Segment<T>,
@@ -26,10 +30,11 @@ PYBIND11_MODULE(pydubins, m) {
   py::class_<mpcc::dubins::LineSegment<T>, mpcc::dubins::Segment<T>,
              std::shared_ptr<mpcc::dubins::LineSegment<T>>>(m, "LineSegment")
       .def(py::init([](const Eigen::Ref<const Eigen::Vector2d>& start,
-                      const Eigen::Ref<const Eigen::Vector2d>& end) {
-          return std::make_shared<mpcc::dubins::LineSegment<T>>(
-              drake::Vector2<T>(start), drake::Vector2<T>(end));
-      }), py::arg("start"), py::arg("end"))
+                       const Eigen::Ref<const Eigen::Vector2d>& end) {
+             return std::make_shared<mpcc::dubins::LineSegment<T>>(
+                 drake::Vector2<T>(start), drake::Vector2<T>(end));
+           }),
+           py::arg("start"), py::arg("end"))
       .def("path_coords", &mpcc::dubins::LineSegment<T>::path_coords)
       .def("length", &mpcc::dubins::LineSegment<T>::length)
       .def("start", &mpcc::dubins::LineSegment<T>::start)
@@ -43,11 +48,12 @@ PYBIND11_MODULE(pydubins, m) {
              std::shared_ptr<mpcc::dubins::CircularSegment<T>>>(
       m, "CircularSegment")
       .def(py::init([](const Eigen::Ref<const Eigen::Vector2d>& center,
-                      T radius, T dir, T heading, T arclength) {
-          return std::make_shared<mpcc::dubins::CircularSegment<T>>(
-              drake::Vector2<T>(center), radius, dir, heading, arclength);
-      }), py::arg("center"), py::arg("radius"), py::arg("dir"),
-          py::arg("heading"), py::arg("arclength"))
+                       T radius, T dir, T heading, T arclength) {
+             return std::make_shared<mpcc::dubins::CircularSegment<T>>(
+                 drake::Vector2<T>(center), radius, dir, heading, arclength);
+           }),
+           py::arg("center"), py::arg("radius"), py::arg("dir"),
+           py::arg("heading"), py::arg("arclength"))
       .def("path_coords", &mpcc::dubins::CircularSegment<T>::path_coords)
       .def("length", &mpcc::dubins::CircularSegment<T>::length)
       .def("start", &mpcc::dubins::CircularSegment<T>::start)
@@ -78,7 +84,13 @@ PYBIND11_MODULE(pydubins, m) {
              }
            })
       .def("num_segments", &mpcc::dubins::DubinsPath<T>::num_segments)
-      .def("get_segment", &mpcc::dubins::DubinsPath<T>::get_segment);
+      .def("get_segment", &mpcc::dubins::DubinsPath<T>::get_segment)
+      .def("lengths", &mpcc::dubins::DubinsPath<T>::lengths)
+      .def("length", &mpcc::dubins::DubinsPath<T>::length)
+      .def("eval", &mpcc::dubins::DubinsPath<T>::eval)
+      .def("start", &mpcc::dubins::DubinsPath<T>::start)
+      .def("end", &mpcc::dubins::DubinsPath<T>::end);
+      // don't bind to_drake -- missing pydrake bindings.
 }
 
 }  // namespace pympcc

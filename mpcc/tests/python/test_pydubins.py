@@ -10,7 +10,7 @@ cs3 = CircularSegment(np.array([50, 35]), 5, -1, np.pi, 5 * np.pi)
 
 sqrthalf = np.sqrt(0.5)
 
-# path = DubinsPath([ls1, cs1, ls2, cs2, cs3])
+path = DubinsPath([ls1, cs1, ls2, cs2, cs3])
 
 def test_lengths():
     assert ls1.length() == approx(20.0)
@@ -60,3 +60,19 @@ def test_evals():
     # circle in other direction
     assert cs2.eval(-1) == approx(cs2.start())
     assert cs2.eval(10 * np.pi) == approx(cs2.end())
+
+def test_path_start_end():
+    assert path.start() == approx(ls1.start())
+    assert path.end() == approx(cs3.end())
+
+def test_path_length():
+    assert path.length() == approx(ls1.length() + cs1.length() + ls2.length() + cs2.length() + cs3.length())
+
+def test_path_start_end():
+    assert path.start() == approx(ls1.start())
+    assert path.end() == approx(cs3.end())
+
+def test_path_eval():
+    assert path.eval(0) == approx(ls1.start())
+    assert path.eval(ls1.length()) == approx(cs1.start())
+    assert path.eval(ls1.length() + cs1.length()) == approx(ls2.start())
