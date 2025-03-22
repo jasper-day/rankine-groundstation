@@ -31,6 +31,7 @@ build-backend = "scikit_build_core.build"
 
 [dependency-groups]
 dev = [
+    "fastapi>=0.115.11",
     "ipython>=8.34.0",
     "matplotlib>=3.10.1",
     "pytest>=8.3.5",

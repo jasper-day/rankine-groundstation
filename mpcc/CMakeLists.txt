@@ -31,10 +31,14 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Create dubins library
-add_library(dubins SHARED
-    src/cpp/lib/dubins.cc
+set(DUBINS_SOURCES 
+    src/cpp/lib/dubins_segment.cc
+    src/cpp/lib/dubins_path.cc
+    src/cpp/lib/dubins_solver.cc
 )
+
+# Create dubins library
+add_library(dubins SHARED ${DUBINS_SOURCES})
 
 target_include_directories(dubins
     PUBLIC src/cpp/include
@@ -47,7 +51,7 @@ target_link_directories(dubins PRIVATE ${drake_LIBRARY_DIRS})
 # Add bindings
 find_package(pybind11 CONFIG REQUIRED)
 
-set(PYDUBINS_SOURCES src/cpp/bindings/dubins_py.cc src/cpp/lib/dubins.cc)
+set(PYDUBINS_SOURCES ${DUBINS_SOURCES} src/cpp/bindings/dubins_py.cc)
 
 pybind11_add_module(pydubins MODULE ${PYDUBINS_SOURCES})
 target_link_libraries(pydubins PRIVATE drake::drake dubins)

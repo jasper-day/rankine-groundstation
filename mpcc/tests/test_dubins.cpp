@@ -2,7 +2,8 @@
 #include <drake/common/eigen_types.h>
 #include <gtest/gtest.h>
 
-#include "dubins.h"
+#include "dubins_path.h"
+#include "dubins_segment.h"
 
 namespace mpcc {
 namespace dubins {
@@ -51,7 +52,8 @@ TEST_F(DubinsPathTest, ScalarConversion) {
 
   // Check second segment is a CircularSegment
   auto second_segment = ad_path.get_segment(1);
-  EXPECT_NE(std::dynamic_pointer_cast<CircularSegment<AD>>(second_segment), nullptr);
+  EXPECT_NE(std::dynamic_pointer_cast<CircularSegment<AD>>(second_segment),
+            nullptr);
 
   // Check values are preserved
   const auto* line = dynamic_cast<const LineSegment<AD>*>(first_segment.get());

@@ -1,12 +1,12 @@
 #pragma once
 
 #include <memory>
-#include <vector>
 #include <stdexcept>
+#include <vector>
 
+#include <drake/common/default_scalars.h>
 #include <drake/common/drake_copyable.h>
 #include <drake/common/eigen_types.h>
-#include <drake/common/trajectories/piecewise_constant_curvature_trajectory.h>
 
 namespace mpcc {
 namespace dubins {
@@ -25,7 +25,7 @@ class Segment {
 
   /// Path-relative coordinates of a point in NED coordinates
   /// The first coordinate is the arclength and the second is normal distance
-  virtual drake::Vector2<T> path_coords(drake::Vector2<T> point) = 0;
+  virtual drake::Vector2<T> path_coords(drake::Vector2<T> point) const = 0;
 
   /// The length of the segment
   virtual T length() const = 0;
@@ -44,6 +44,12 @@ class Segment {
 
   /// arclength -> location
   virtual drake::Vector2<T> eval(T arclength) const = 0;
+
+  /// get parameters
+  virtual drake::VectorX<T> get_params() const = 0;
+
+  /// set parameters
+  virtual void set_params(const drake::VectorX<T>& params) = 0;
 
   SegmentType type = SegmentType::SEGMENT;
 
@@ -69,9 +75,7 @@ class LineSegment final : public Segment<T> {
  public:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(LineSegment);
 
-  LineSegment() : Segment<T>() {
-    this->type = SegmentType::LINESEGMENT;
-  }
+  LineSegment() : Segment<T>() { this->type = SegmentType::LINESEGMENT; }
   ~LineSegment() = default;
 
   // Constructor with start and end points
@@ -88,7 +92,7 @@ class LineSegment final : public Segment<T> {
     this->type = SegmentType::LINESEGMENT;
   }
 
-  drake::Vector2<T> path_coords(drake::Vector2<T> point) override;
+  drake::Vector2<T> path_coords(drake::Vector2<T> point) const override;
   T length() const override;
   drake::Vector2<T> start() const override { return start_; }
   drake::Vector2<T> end() const override { return end_; }
@@ -96,8 +100,23 @@ class LineSegment final : public Segment<T> {
   T heading_end() const override;
   drake::Vector2<T> eval(T arclength) const override;
 
+  drake::VectorX<T> get_params() const override {
+    drake::VectorX<T> output(4);
+    output << start_, end_;
+    return output;
+  }
+
+  void set_params(const drake::VectorX<T>& params) override {
+    drake::Vector<T, 4> input = params;
+    start_ = input.segment(0, 2);
+    end_ = input.segment(2, 2);
+  }
+
   template <typename U>
   friend class LineSegment;
+
+  template <typename U>
+  friend class DubinsPath;
 
  private:
   drake::Vector2<T> start_;
@@ -133,7 +152,8 @@ class CircularSegment final : public Segment<T> {
   // Constructor with all parameters
   CircularSegment(const drake::Vector2<T>& center_in, T radius_in, T dir_in,
                   T heading_in, T arclength_in)
-      : Segment<T>(), center_(center_in),
+      : Segment<T>(),
+        center_(center_in),
         radius_(radius_in),
         dir_(dir_in),
         heading_(heading_in),
@@ -153,7 +173,7 @@ class CircularSegment final : public Segment<T> {
     this->type = SegmentType::CIRCULARSEGMENT;
   }
 
-  drake::Vector2<T> path_coords(drake::Vector2<T> point) override;
+  drake::Vector2<T> path_coords(drake::Vector2<T> point) const override;
   T length() const override { return arclength_; }
   drake::Vector2<T> start() const override;
   drake::Vector2<T> end() const override;
@@ -162,6 +182,21 @@ class CircularSegment final : public Segment<T> {
     return heading_start() + dir_ * arclength_ / radius_;
   }
   drake::Vector2<T> eval(T arclength) const override;
+
+  drake::VectorX<T> get_params() const override {
+    drake::VectorX<T> output(6);
+    output << center_, radius_, dir_, heading_, arclength_;
+    return output;
+  }
+
+  void set_params(const drake::VectorX<T>& params) override {
+    drake::Vector<T, 6> input = params;
+    center_ = input.segment(0, 2);
+    radius_ = input(2);
+    dir_ = input(3);
+    heading_ = input(4);
+    arclength_ = input(5);
+  }
 
   template <typename U>
   friend class CircularSegment;
@@ -177,85 +212,14 @@ class CircularSegment final : public Segment<T> {
   T arclength_;
 };
 
-/**
- * @brief Dubins path.
- *
- * Dubins paths are made up of straight lines and circular arcs.
- * This implementation uses an ordered list of LineSegments and
- * CircularSegments.
- * A solver is given which enforces location and tangency constraints.
- * This uses the Drake symbolic algebra package.
- *
- * @tparam T the scalar type of the path
- */
-template <typename T>
-class DubinsPath {
- public:
-  DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(DubinsPath);
-
-  DubinsPath() = default;
-
-  DubinsPath(std::vector<std::shared_ptr<Segment<T>>> segments_in)
-      : segments_(segments_in) {
-    lengths_ = lengths();
-  }
-
-  ~DubinsPath() = default;
-
-  // Scalar converting copy constructor
-  template <typename U>
-  explicit DubinsPath(const DubinsPath<U>& other) {
-    segments_.reserve(other.segments_.size());
-    std::transform(
-        other.segments_.begin(), other.segments_.end(),
-        std::back_inserter(segments_),
-        [&](const auto& segment) -> std::shared_ptr<Segment<T>> {
-          if (segment->type == SegmentType::LINESEGMENT) {
-            auto line_segment = std::dynamic_pointer_cast<LineSegment<U>>(segment);
-            return std::make_shared<LineSegment<T>>(*line_segment);
-          } else if (segment->type == SegmentType::CIRCULARSEGMENT) {
-            auto circ_segment = std::dynamic_pointer_cast<CircularSegment<U>>(segment);
-            return std::make_shared<CircularSegment<T>>(*circ_segment);
-          }
-          throw std::runtime_error("Unknown segment type");
-        });
-  }
-
-  /// Add a segment to the path
-  void add_segment(std::shared_ptr<Segment<T>> segment) {
-    segments_.push_back(std::move(segment));
-  }
-
-  /// Get the number of segments in the path
-  size_t num_segments() const { return segments_.size(); }
-
-  /// Get a segment by index
-  const std::shared_ptr<Segment<T>> get_segment(size_t index) const {
-    return segments_[index];
-  }
-
-  /// Get the associated arclengths
-  std::vector<T> lengths();
-  /// Total length of path
-  T length();
-  /// Find point on path
-  drake::Vector2<T> eval(T arclength);
-  /// Starting point
-  drake::Vector2<T> start() { return eval(T(0)); };
-  /// End point
-  drake::Vector2<T> end() { return eval(length()); };
-
-  /// Convert to Drake representation
-  drake::trajectories::PiecewiseConstantCurvatureTrajectory<T> to_drake() const;
-
-  // Declare friendship to enable scalar conversion
-  template <typename U>
-  friend class DubinsPath;
-
- private:
-  std::vector<std::shared_ptr<Segment<T>>> segments_;
-  std::vector<T> lengths_;
-};
-
 }  // namespace dubins
 }  // namespace mpcc
+
+DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
+    class ::mpcc::dubins::Segment);
+
+DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
+    class ::mpcc::dubins::CircularSegment);
+
+DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
+    class ::mpcc::dubins::LineSegment);

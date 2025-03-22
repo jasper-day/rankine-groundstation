@@ -2,15 +2,53 @@ from mpcc.pydubins import LineSegment, CircularSegment, DubinsPath
 from pytest import approx
 import numpy as np
 
-ls1 = LineSegment(np.array([10.0, 0.0]), np.array([10.0, 20.0]))
-cs1 = CircularSegment(np.array([15, 20]), 5, -1, np.pi, 5 * np.pi/2)
-ls2 = LineSegment(np.array([15, 25]), np.array([35, 25]))
-cs2 = CircularSegment(np.array([35,35]), 10, 1, -np.pi/2, 10 * np.pi/2)
-cs3 = CircularSegment(np.array([50, 35]), 5, -1, np.pi, 5 * np.pi)
+def create_test_segments():
+    """Creates a test Dubins path with 5 segments:
+    1. Vertical line segment from (10, 0) to (10, 20)
+    2. Circular segment with center (15, 20), radius 5, direction -1, heading pi, arclength 5pi/2
+    3. Horizontal line segment from (15, 25) to (35, 25)
+    4. Circular segment with center (35, 35), radius 10, direction 1, heading -pi/2, arclength 10pi/2
+    5. Circular segment with center (50, 35), radius 5, direction -1, heading pi, arclength 5pi
+    """
+    ls1 = LineSegment(np.array([10.0, 0.0]), np.array([10.0, 20.0]))
+    cs1 = CircularSegment(np.array([15, 20]), 5, -1, np.pi, 5 * np.pi/2)
+    ls2 = LineSegment(np.array([15, 25]), np.array([35, 25]))
+    cs2 = CircularSegment(np.array([35,35]), 10, 1, -np.pi/2, 10 * np.pi/2)
+    cs3 = CircularSegment(np.array([50, 35]), 5, -1, np.pi, 5 * np.pi)
+
+    return ls1, cs1, ls2, cs2, cs3
+
+# Create the test path for use in this file
+ls1, cs1, ls2, cs2, cs3 = create_test_segments()
 
 sqrthalf = np.sqrt(0.5)
 
 path = DubinsPath([ls1, cs1, ls2, cs2, cs3])
+
+def test_get_params():
+    assert ls1.get_params().shape == (4,)
+    assert cs1.get_params().shape == (6,)
+    assert ls1.get_params() == approx(np.array([10.0, 0.0, 10.0, 20.0]))
+    assert cs1.get_params() == approx(np.array([15.0, 20.0, 5.0, -1.0, np.pi, 5.0 * np.pi / 2.0]))
+    assert ls2.get_params() == approx(np.array([15.0, 25.0, 35.0, 25.0]))
+    assert cs2.get_params() == approx(np.array([35.0, 35.0, 10.0, 1.0, -np.pi / 2.0, 10.0 * np.pi / 2.0]))
+    assert cs3.get_params() == approx(np.array([50.0, 35.0, 5.0, -1.0, np.pi, 5.0 * np.pi]))
+
+def test_get_path_params():
+    assert path.get_params() == approx(
+        np.concatenate([ls1.get_params(), cs1.get_params(), ls2.get_params(), cs2.get_params(), cs3.get_params()])
+    )
+
+def test_constraint_residuals():
+    assert path.get_constraint_residuals(path.get_params()) == approx(np.zeros(8))
+    altered_params = path.get_params()
+    # change endpoint of first line, now pointing at 45°
+    altered_params[2] = 30.0
+    expected_residuals = np.zeros(8)
+    # location, then heading residuals
+    expected_residuals[0] = 20.0**2
+    expected_residuals[4] = np.sin(np.pi / 4)**2
+    assert path.get_constraint_residuals(altered_params) == approx(expected_residuals)
 
 def test_lengths():
     assert ls1.length() == approx(20.0)
