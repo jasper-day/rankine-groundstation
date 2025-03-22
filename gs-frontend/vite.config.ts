@@ -2,10 +2,27 @@ import tailwindcss from '@tailwindcss/vite';
 import { svelteTesting } from '@testing-library/svelte/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
+import { viteStaticCopy } from "vite-plugin-static-copy";
+
+const cesiumSource = "node_modules/cesium/Build/Cesium";
+const cesiumBaseUrl = "cesiumStatic";
+// ...
 
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit()],
+	plugins: [tailwindcss(), sveltekit(),
+	viteStaticCopy({
+		targets: [
+			{ src: `${cesiumSource}/ThirdParty`, dest: cesiumBaseUrl },
+			{ src: `${cesiumSource}/Workers`, dest: cesiumBaseUrl },
+			{ src: `${cesiumSource}/Assets`, dest: cesiumBaseUrl },
+			{ src: `${cesiumSource}/Widgets`, dest: cesiumBaseUrl },
+		],
+	}),
+	],
 
+	define: {
+	  CESIUM_BASE_URL: JSON.stringify(cesiumBaseUrl),
+	},
 	test: {
 		workspace: [
 			{
