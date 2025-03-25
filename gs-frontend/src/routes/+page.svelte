@@ -11,9 +11,9 @@
 		ScreenSpaceEventHandler,
 		ScreenSpaceEventType,
 		defined,
-
-		Matrix4
-
+		Matrix4,
+		Cartesian4,
+		Cartesian2
 	} from 'cesium';
 	import { Arc, Line, Local3, ORIGIN } from '$lib/geometry';
 	import 'cesium/Build/Cesium/Widgets/widgets.css';
@@ -21,21 +21,27 @@
 
 	Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN;
 
-	const lines: Line[] = []; //new Line(new Local3(0, 0, 0), new Local3(0, 20, 0))];
-	const arcs: Arc[] = [new Arc(new Local3(0, 0, 0), 20, Math.PI / 2, (Math.PI * 3) / 2)];
+	const shapes: (Arc | Line)[] = [];// [new Arc(new Local3(0, 0, 0), 20, Math.PI / 2, (Math.PI * 3) / 2)];
 
 	let viewer: Viewer | undefined;
+	let ctx: CanvasRenderingContext2D | null = null;
 	let tool: 'Line' | 'Arc' | 'Empty' = 'Empty';
+	let intermediate_points: Local3[] = [];
+
+	// to avoid instantiating objects continuously
+	// may be premature optimisation but cesium does it so i will too
+	let scratchc3_a: Cartesian3 = new Cartesian3();
+	let scratchc3_b: Cartesian3 = new Cartesian3();
 
 	onMount(() => {
 		// Initialize the Cesium Viewer in the HTML element with the `cesiumContainer` ID.
 		viewer = new Viewer('cesiumContainer', {
 			terrain: Terrain.fromWorldTerrain()
 		});
+		ctx = canvas.getContext('2d');
 		canvas.width = viewer.canvas.width;
 		canvas.height = viewer.canvas.height;
 
-		// viewer.canvas.setAttribute("tabindex", "0"); // apparently needed for getting keyboard events
 		// Fly the camera to the origin longitude, latitude, and height.
 		viewer.camera.flyTo({
 			destination: Cartesian3.fromRadians(ORIGIN.longitude, ORIGIN.latitude, 1000),
@@ -47,104 +53,169 @@
 		});
 		viewer.camera.switchToOrthographicFrustum();
 
+		viewer.clock.onTick.addEventListener((_: any) => {
+			if (viewer && ctx) {
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+				draw_tooltip(mouseX, mouseY);
+				ctx.strokeStyle = 'yellow';
+				ctx.fillStyle = "#ffd040";
+				for (const s of shapes) {
+					s.draw(ctx, viewer);
+				}
+
+
+				if (intermediate_points.length > 0) {
+					// some shape is being defined!! draw it
+					// TODO costly operation to undo later on...
+					const mouse_cartesian = viewer.camera.pickEllipsoid(
+						new Cartesian3(mouseX, mouseY),
+						viewer.scene.ellipsoid
+					);
+					if (!mouse_cartesian) return;
+					const mouse_local = Local3.fromCartesian(mouse_cartesian);
+
+					if (tool == "Line") {
+						new Line(intermediate_points[0], mouse_local).draw(ctx, viewer);
+					}
+					if (tool == "Arc" && intermediate_points.length > 0) {
+						if (intermediate_points.length == 1) {
+							let centre = intermediate_points[0];
+							let outer_point = mouse_local;
+							let r = Local3.distance(centre, outer_point);
+							new Arc(centre, r, 0, Math.PI * 2).draw(ctx, viewer);
+						} else if (intermediate_points.length == 2) {
+							Arc.from_centre_and_points(intermediate_points[0], intermediate_points[1], mouse_local).draw(ctx, viewer);
+						}
+					}
+				}
+			}
+		});
+
 		// Add Cesium OSM Buildings, a global 3D buildings layer.
 		// createOsmBuildingsAsync().then((buildingTileset) => viewer.scene.primitives.add(buildingTileset));
-
-		for (const l of lines) {
-			viewer.entities.add(l.toEntity());
-		}
-		for (const a of arcs) {
-			let entities = a.toEntities();
-			for (const e of entities) {
-				viewer.entities.add(e);
-			}
-		}
 	});
 
-	function map_clicked(event: MouseEvent) {
+	let drag_object: { shape_index: number, point_index: number } | undefined = undefined;
+	function mousedown(event: MouseEvent) {
 		// console.log(event);
 		if (viewer !== undefined) {
-			// const ellipsoid = viewer.scene.ellipsoid;
-			// const cartesian = viewer.camera.pickEllipsoid(
-			// 	new Cartesian3(event.clientX, event.clientY),
-			// 	ellipsoid
-			// );
-			// if (cartesian !== undefined) {
-			// 	line = viewer.entities.add(
-			// 		new Line(new Local3(0, 0, 0), Local3.fromCartesian(cartesian)).toEntity()
-			// 	);
-			// }
+			const cartesian = viewer.camera.pickEllipsoid(
+				new Cartesian3(event.clientX, event.clientY),
+				viewer.scene.ellipsoid
+			);
+			if (!cartesian) return; // just ignore an invalid position
+
+			if (tool == "Line") {
+				if (intermediate_points.length == 0) {
+					// add first point
+					intermediate_points.push(Local3.fromCartesian(cartesian));
+				} else {
+					shapes.push(new Line(intermediate_points[0], Local3.fromCartesian(cartesian)));
+					intermediate_points = [];
+				}
+			} else if (tool == "Arc") {
+				if (intermediate_points.length < 2) {
+					intermediate_points.push(Local3.fromCartesian(cartesian));
+				} else {
+					shapes.push(Arc.from_centre_and_points(intermediate_points[0], intermediate_points[1], Local3.fromCartesian(cartesian)));
+					intermediate_points = [];
+				}
+			} else if (tool == "Empty") {
+				// check for dragging
+				const mouse = new Cartesian2(event.clientX, event.clientY);
+				let idx = 0;
+				for (const s of shapes) {
+					if (s instanceof Line) {
+						const a = viewer.scene.cartesianToCanvasCoordinates(s.start.toCartesian(), scratchc3_a);
+						const b = viewer.scene.cartesianToCanvasCoordinates(s.end.toCartesian(), scratchc3_b);
+						
+						if (Cartesian2.distanceSquared(a, mouse) < 3 * 3) { // 3 is the radius of the little end points, TODO make this a constant
+							drag_object = { shape_index: idx, point_index: 0 };
+						}
+						if (Cartesian2.distanceSquared(b, mouse) < 3 * 3) { // 3 is the radius of the little end points, TODO make this a constant
+							drag_object = { shape_index: idx, point_index: 1 };
+						}
+					}
+					idx += 1;
+				}
+				if (drag_object !== undefined) {
+					viewer.scene.screenSpaceCameraController.enableInputs = false;
+				}
+			}
 		}
 	}
+
+	function mouseup(event: MouseEvent) {
+		if (drag_object !== undefined) {
+			if (viewer) viewer.scene.screenSpaceCameraController.enableInputs = true;
+			drag_object = undefined;
+		}
+	}
+	
 	function keypress(event: KeyboardEvent) {
-		// console.log(event.keyCode);
 		if (event.key == 'l') {
 			tool = 'Line';
 		} else if (event.key == 'a') {
 			tool = 'Arc';
-		} else if (event.keyCode == 27) {
+		} else if (event.key == "Escape") {
 			tool = 'Empty';
+			intermediate_points = [];
 		}
 		draw_tooltip(mouseX, mouseY);
 	}
+
 	let cleared = false;
 	let mouseX: number, mouseY: number;
 	function mousemove(event: MouseEvent) {
 		mouseX = event.clientX;
 		mouseY = event.clientY;
-		draw_tooltip(mouseX, mouseY);
-		if (viewer) {
-			let ctx = canvas.getContext('2d');
-			let a = viewer.camera.viewMatrix;
-			let b = viewer.camera.frustum.projectionMatrix;
-			let v = new Cartesian3();
-			Matrix4.multiplyByPoint(a, new Local3(0, 0, 0).toCartesian(), v);
-			viewer.camera.frustum.computeCullingVolume
-			console.log("VEctor:", v);
-			if (ctx) {
-				ctx.clearRect(0, 0, canvas.width, canvas.height);
-				ctx.strokeStyle = 'yellow';
-				ctx.beginPath();
-				ctx.arc(v.x, -v.y, 10, 0, 2 * Math.PI);
-				ctx.stroke();
+		if (drag_object !== undefined && viewer !== undefined) {
+			const ellipsoid = viewer.scene.ellipsoid;
+			const cartesian = viewer.camera.pickEllipsoid(
+				new Cartesian3(event.clientX, event.clientY),
+				ellipsoid
+			);
+			if (!cartesian) return; // just ignore an invalid position
+			let local = Local3.fromCartesian(cartesian);
+			let s = shapes[drag_object.shape_index];
+			if (s instanceof Line) {
+				if (drag_object.point_index == 0) {
+					s.start = local;
+				}
+				if (drag_object.point_index == 1) {
+					s.end = local;
+				}
+			} else if (s instanceof Arc) {
+				
 			}
-			
 		}
-		// if (line && viewer) {
-		// 	const ellipsoid = viewer.scene.ellipsoid;
-		// 	const cartesian = viewer.camera.pickEllipsoid(
-		// 		new Cartesian3(event.clientX, event.clientY),
-		// 		ellipsoid
-		// 	);
-		// 	// line.corridor.positions = [new Local3(0, 0, 0).toCartesian(), cartesian];
-		// }
+		// draw_tooltip(mouseX, mouseY);
 	}
 
 	function draw_tooltip(x: number, y: number) {
-		// if (tool === 'Empty' && cleared) {
-		// 	return;
-		// }
-		// let ctx = canvas.getContext('2d');
-		// if (ctx) {
-		// 	ctx.clearRect(0, 0, canvas.width, canvas.height);
-		// 	if (tool === 'Empty' && !cleared) {
-		// 		cleared = true;
-		// 		return;
-		// 	}
-		// 	cleared = false;
-		// 	x -= 16;
-		// 	y += 16;
-		// 	ctx.strokeStyle = 'red';
-		// 	if (tool == 'Arc') {
-		// 		ctx.beginPath();
-		// 		ctx.arc(x, y, 10, Math.PI / 2, (2 * Math.PI) / 3 + Math.PI / 2);
-		// 	} else if (tool == 'Line') {
-		// 		ctx.beginPath();
-		// 		ctx.moveTo(x, y);
-		// 		ctx.lineTo(x + 16, y + 16);
-		// 	}
-		// 	ctx.stroke();
-		// }
+		if (tool === 'Empty' && cleared) {
+			return;
+		}
+		if (ctx) {
+			// ctx.clearRect(0, 0, canvas.width, canvas.height);
+			if (tool === 'Empty' && !cleared) {
+				cleared = true;
+				return;
+			}
+			cleared = false;
+			x -= 16;
+			y += 16;
+			ctx.strokeStyle = 'red';
+			if (tool == 'Arc') {
+				ctx.beginPath();
+				ctx.arc(x, y, 10, Math.PI / 2, (2 * Math.PI) / 3 + Math.PI / 2);
+			} else if (tool == 'Line') {
+				ctx.beginPath();
+				ctx.moveTo(x, y);
+				ctx.lineTo(x + 16, y + 16);
+			}
+			ctx.stroke();
+		}
 	}
 	let canvas: HTMLCanvasElement;
 </script>
@@ -154,6 +225,7 @@
 <div
 	id="cesiumContainer"
 	style="height:max-content; z-index: 1;position:relative;"
-	on:click={map_clicked}
+	on:mousedown={mousedown}
+	on:mouseup={mouseup}
 ></div>
-<svelte:window on:keydown={keypress} on:mousemove={mousemove} />
+<svelte:window on:keydown={keypress} on:mousemove|preventDefault={mousemove} />
