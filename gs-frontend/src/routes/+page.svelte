@@ -228,16 +228,29 @@
 			// ignore invalid position...
 			if (cartesian === undefined) return;
 			const b = Local3.fromCartesian(cartesian);
-	        const theta0 = -Math.atan2(a.y - centre.y, a.x - centre.x);
-	        const theta1 = -Math.atan2(b.y - centre.y, b.x - centre.x);
 
-	        // this is awful and slow
-	        // why is it so hard to find the signed difference between two angles??
-	        let delta = Math.atan2(Math.sin(theta0 - theta1), Math.cos(theta0 - theta1));
-	        prelim_arc_direction_guess = delta > 0 ? -1 : 1;
+			// b = location of mouse pointer
+			// centre = circle centre
+			// a = starting point of arc
+			// project location of mouse pointer onto line CA
+			const lineCA = a.sub(centre),
+			// b length in CA direction
+				  lineCB = b.sub(centre),
+			// distance along CA
+				  distCAtoB = lineCA.mul(lineCA.dot(lineCB) / lineCA.dot(lineCA)),
+			// normal distance from CA to B
+				  distBtoCA = lineCB.sub(distCAtoB),
+			// right hand rotation of CA
+				  lineCA_rot90_RH = new Local3(- lineCA.y, lineCA.x, lineCA.z),
+			// which side are we on?
+				  side = lineCA_rot90_RH.dot(distBtoCA),
+			// 1 for CCW, -1 for CW
+				  dir = Math.sign(side);
+			console.log(dir);
+	        prelim_arc_direction_guess = dir == 1 ? 1 : -1;
 	        // don't guess for very tiny (possibly zero) difference
 	        // in fact, reset so we can guess again
-	        if (Math.abs(delta) < 0.15) {
+	        if (Math.abs(side) < 0.15) {
 	        	arc_direction_guess = undefined;
 	        	return;
 	        }
