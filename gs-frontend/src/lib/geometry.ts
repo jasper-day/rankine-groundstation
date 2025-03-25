@@ -46,6 +46,22 @@ export class Local3 {
     get y(): number { return this._y; }
     get z(): number { return this._z; }
 
+    add(p: Local3): Local3 {
+        return new Local3(p.x + this._x, p.y + this._y, p.z + this._z);
+    }
+
+    sub(p: Local3): Local3 {
+        return new Local3(this._x - p.x, this._y - p.y, this._z - p.z);
+    }
+
+    dot(p: Local3): number {
+        return this._x * p.x + this._y * p.y + this._z * p.z;
+    }
+
+    mul(s: number): Local3 {
+        return new Local3(this._x * s, this._y * s, this._z * s);
+    }
+
     static distance(a: Local3, b: Local3): number {
         const dx = a.x - b.x;
         const dy = a.y - b.y;
