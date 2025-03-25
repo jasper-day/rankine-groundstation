@@ -5,6 +5,7 @@ import { Cartesian3, Color, CornerType, Cartographic, Entity, Viewer, Cartesian2
 // Some point at buckminster gliding club
 export const ORIGIN = Cartographic.fromDegrees(-0.7097051097617251, 52.830542659049435, 146 + 60); // approx airfield elevation ????
 export const HANDLE_POINT_RADIUS = 4;
+const TRI_SIZE = 10;
 
 // to avoid instantiating objects continuously
 // may be premature optimisation but cesium does it so i will too
@@ -94,16 +95,15 @@ export class Line {
 		    return;
 		};
 
-		const tri_size = 10;
 		Cartesian2.normalize(dir, dir);
 		const norm = new Cartesian2(-dir.y, dir.x);
-		const midpoint_x = (a.x + b.x) / 2 - tri_size / 2 * dir.x;
-		const midpoint_y = (a.y + b.y) / 2 - tri_size / 2 * dir.y;
+		const midpoint_x = (a.x + b.x) / 2 - TRI_SIZE / 2 * dir.x;
+		const midpoint_y = (a.y + b.y) / 2 - TRI_SIZE / 2 * dir.y;
 		ctx.beginPath();
-		ctx.moveTo(midpoint_x + norm.x * tri_size / 2, midpoint_y + norm.y * tri_size / 2);
-		ctx.lineTo(midpoint_x - norm.x * tri_size / 2, midpoint_y - norm.y * tri_size / 2);
-		ctx.lineTo(midpoint_x + dir.x * tri_size, midpoint_y + dir.y * tri_size);
-		ctx.lineTo(midpoint_x + norm.x * tri_size / 2, midpoint_y + norm.y * tri_size / 2);
+		ctx.moveTo(midpoint_x + norm.x * TRI_SIZE / 2, midpoint_y + norm.y * TRI_SIZE / 2);
+		ctx.lineTo(midpoint_x - norm.x * TRI_SIZE / 2, midpoint_y - norm.y * TRI_SIZE / 2);
+		ctx.lineTo(midpoint_x + dir.x * TRI_SIZE, midpoint_y + dir.y * TRI_SIZE);
+		ctx.lineTo(midpoint_x + norm.x * TRI_SIZE / 2, midpoint_y + norm.y * TRI_SIZE / 2);
 		ctx.closePath();
 		ctx.fill();
 		
@@ -114,60 +114,60 @@ export class Arc {
     centre: Local3;
     radius: number;
     theta0: number; // radians
-    theta1: number; // >= theta0
+    arc_length: number; // radians ??
     direction: 1 | -1;
-    constructor(centre: Local3, radius: number, theta0: number, theta1: number, direction: 1 | -1) {
+    constructor(centre: Local3, radius: number, theta0: number, arc_length: number, direction: 1 | -1) {
         this.centre = centre;
         this.radius = radius;
         this.theta0 = theta0;
-        this.theta1 = theta1;
-        // yes I did choose these names specifically to make them line up well
+        this.arc_length = arc_length;
         this.direction = direction;
     }
 
-    toEntities(): Entity[] {
-        let vertices = [];
-        let theta = this.theta0;
+    // toEntities(): Entity[] {
+    //     let vertices = [];
+    //     let theta = this.theta0;
 
-        while (theta < this.theta1) {
-            const x = this.centre.x + this.radius * Math.cos(theta);
-            const y = this.centre.y + this.radius * Math.sin(theta);
-            vertices.push(new Local3(x, y, this.centre.z).toCartesian());
-            theta += 0.05
-        }
-        return [new Entity({
-            name: "",
-            // polyline: {
-            //   positions: vertices,
-            //   width: 2.0,
-            //   material: Color.RED,
-            // },
-            corridor: {
-                positions: vertices,
-                height: ORIGIN.height,
-                width: 2.0,
-                cornerType: CornerType.MITERED,
-                material: Color.RED,
-                outline: false,
-            },
-        }),
-        new Entity({
-            name: "",
-            position: this.centre.toCartesian(),
-            ellipse: {
-                semiMinorAxis: 0.8,
-                semiMajorAxis: 0.8,
-                height: ORIGIN.height,
-                material: Color.RED,
-            }
-        })];
-    }
+    //     while (theta < this.theta1) {
+    //         const x = this.centre.x + this.radius * Math.cos(theta);
+    //         const y = this.centre.y + this.radius * Math.sin(theta);
+    //         vertices.push(new Local3(x, y, this.centre.z).toCartesian());
+    //         theta += 0.05
+    //     }
+    //     return [new Entity({
+    //         name: "",
+    //         // polyline: {
+    //         //   positions: vertices,
+    //         //   width: 2.0,
+    //         //   material: Color.RED,
+    //         // },
+    //         corridor: {
+    //             positions: vertices,
+    //             height: ORIGIN.height,
+    //             width: 2.0,
+    //             cornerType: CornerType.MITERED,
+    //             material: Color.RED,
+    //             outline: false,
+    //         },
+    //     }),
+    //     new Entity({
+    //         name: "",
+    //         position: this.centre.toCartesian(),
+    //         ellipse: {
+    //             semiMinorAxis: 0.8,
+    //             semiMajorAxis: 0.8,
+    //             height: ORIGIN.height,
+    //             material: Color.RED,
+    //         }
+    //     })];
+    // }
 
     static from_centre_and_points(centre: Local3, a: Local3, b: Local3, direction: 1 | -1) {
         const r = Local3.distance(centre, a);
-        const theta0 = -Math.atan2(a.y - centre.y, a.x - centre.x);
-        const theta1 = -Math.atan2(b.y - centre.y, b.x - centre.x);
-        return new Arc(centre, r, theta0, theta1, direction);
+        let theta0 = -Math.atan2(a.y - centre.y, a.x - centre.x);
+        let theta1 = -Math.atan2(b.y - centre.y, b.x - centre.x);
+        let arc_length = ang_mod2(direction == -1 ? theta0 - theta1 : theta1 - theta0);
+        return new Arc(centre, r, theta0, arc_length, direction);
     }
 
     draw(ctx: CanvasRenderingContext2D, viewer: Viewer, inhibit_endpoints?: boolean) {
@@ -175,25 +175,64 @@ export class Arc {
 			this.centre.toCartesian(),
 			scratchc3_a
 		);
+		const arc_length = this.direction == 1 ? this.arc_length : -this.arc_length
+		const theta1 = ang_mod(this.theta0 + arc_length);
+		const half_theta = ang_mod(this.theta0 + arc_length / 2);
+		console.log(this.theta0, arc_length, theta1, half_theta);
 		// hack to get the radius in screen space
-		const centre_plus_rad = new Local3(this.centre.x + this.radius, this.centre.y, this.centre.z);
-		const rad_point = viewer.scene.cartesianToCanvasCoordinates(
-			centre_plus_rad.toCartesian()
+		const rad_point_local = new Local3(this.centre.x + this.radius, this.centre.y, this.centre.z);
+		let rad_point_screen = viewer.scene.cartesianToCanvasCoordinates(
+			rad_point_local.toCartesian()
 		);
-		const rad = Cartesian2.distance(centre, rad_point);
+		const rad = Cartesian2.distance(centre, rad_point_screen);
 		ctx.beginPath();
-		ctx.arc(centre.x, centre.y, rad, this.theta0, this.theta1, this.direction == -1);
+		ctx.arc(centre.x, centre.y, rad, this.theta0, theta1, this.direction == -1);
 		ctx.stroke();
 		ctx.beginPath();
 		ctx.arc(centre.x, centre.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
 		ctx.fill();
 		if (!inhibit_endpoints) {
-    		ctx.beginPath();
+            ctx.beginPath();
     		ctx.arc(centre.x + rad * Math.cos(this.theta0), centre.y + rad * Math.sin(this.theta0), HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
     		ctx.fill();
     		ctx.beginPath();
-    		ctx.arc(centre.x + rad * Math.cos(this.theta1), centre.y + rad * Math.sin(this.theta1), HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
+    		ctx.arc(centre.x + rad * Math.cos(theta1), centre.y + rad * Math.sin(theta1), HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
     		ctx.fill();
 		}
+
+		const half_theta_screen = new Cartesian2(centre.x + rad * Math.cos(half_theta), centre.y + rad * Math.sin(half_theta))
+		const norm = new Cartesian2();
+        Cartesian2.subtract(half_theta_screen, centre, norm);
+        if (Cartesian2.magnitudeSquared(norm) < 0.1) {
+            return;
+        }
+        Cartesian2.normalize(norm, norm);
+        const tangent = new Cartesian2(-norm.y, norm.x);
+        Cartesian2.multiplyByScalar(tangent, -this.direction, tangent);
+        const arrow_point = new Cartesian2(half_theta_screen.x - tangent.x * TRI_SIZE / 2, half_theta_screen.y - tangent.y * TRI_SIZE / 2);
+        const arrow_base_inner = new Cartesian2(half_theta_screen.x + (tangent.x + norm.x) * TRI_SIZE / 2, half_theta_screen.y + (tangent.y + norm.y) * TRI_SIZE / 2);
+        const arrow_base_outer = new Cartesian2(half_theta_screen.x + (tangent.x - norm.x) * TRI_SIZE / 2, half_theta_screen.y + (tangent.y - norm.y) * TRI_SIZE / 2);
+        ctx.beginPath();
+        ctx.moveTo(arrow_point.x, arrow_point.y);
+        ctx.lineTo(arrow_base_inner.x, arrow_base_inner.y);
+        ctx.lineTo(arrow_base_outer.x, arrow_base_outer.y);
+        ctx.moveTo(arrow_point.x, arrow_point.y);
+        ctx.closePath();
+        ctx.fill()
     }
+}
+export function angle_delta(theta0: number, theta1: number): number {
+    // this is awful and slow
+    // why is it so hard to find the signed difference between two angles??
+    return Math.atan2(Math.sin(theta0 - theta1), Math.cos(theta0 - theta1));
+}
+function ang_mod(a: number): number {
+    while (a > Math.PI) a -= 2 * Math.PI;
+    while (a <= -Math.PI) a += 2 * Math.PI;
+    return a;
+}
+function ang_mod2(a: number): number {
+    while (a > 2 * Math.PI) a -= 2 * Math.PI;
+    while (a < 0) a += 2 * Math.PI;
+    return a;
 }

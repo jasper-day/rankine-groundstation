@@ -9,7 +9,7 @@
 		Viewer,
 		Cartesian2
 	} from 'cesium';
-	import { Arc, HANDLE_POINT_RADIUS, Line, Local3, ORIGIN } from '$lib/geometry';
+	import { angle_delta, Arc, HANDLE_POINT_RADIUS, Line, Local3, ORIGIN } from '$lib/geometry';
 	import 'cesium/Build/Cesium/Widgets/widgets.css';
 	import { onMount } from 'svelte';
 
@@ -77,7 +77,7 @@
 							let centre = intermediate_points[0];
 							let outer_point = mouse_local;
 							let r = Local3.distance(centre, outer_point);
-							new Arc(centre, r, 0, Math.PI * 2, 1).draw(ctx, viewer, true);
+							new Arc(centre, r, 0, Math.PI * 2 - 0.0001, 1).draw(ctx, viewer, true);
 						} else if (intermediate_points.length == 2) {
 							let dir: 1 | -1;
 							if (arc_direction_guess === undefined) {
@@ -181,12 +181,7 @@
 		}
 		draw_tooltip(mouseX, mouseY);
 	}
-
-	function abs_angle(a: number): number {
-	 	const pi2 = Math.PI * 2;
-		return (pi2 + (a % pi2)) % pi2;
-	}
-
+	
 	let cleared = false;
 	let mouseX: number, mouseY: number;
 	function mousemove(event: MouseEvent) {
@@ -227,9 +222,7 @@
 	        const theta0 = -Math.atan2(a.y - centre.y, a.x - centre.x);
 	        const theta1 = -Math.atan2(b.y - centre.y, b.x - centre.x);
 
-	        // this is awful and slow
-	        // why is it so hard to find the signed difference between two angles??
-	        let delta = Math.atan2(Math.sin(theta0 - theta1), Math.cos(theta0 - theta1));
+	        const delta = angle_delta(theta0, theta1);
 	        prelim_arc_direction_guess = delta > 0 ? -1 : 1;
 	        // don't guess for very tiny (possibly zero) difference
 	        // in fact, reset so we can guess again
@@ -278,7 +271,6 @@
 <div
 	id="cesiumContainer"
 	style="height:max-content; z-index: 1;position:relative;"
-	on:mousedown={mousedown}
-	on:mouseup={mouseup}
 ></div>
-<svelte:window on:keydown={keypress} on:mousemove|preventDefault={mousemove} />
+<svelte:window on:keydown={keypress} on:mousemove|preventDefault={mousemove}
+	on:mousedown={mousedown} on:mouseup={mouseup} />
