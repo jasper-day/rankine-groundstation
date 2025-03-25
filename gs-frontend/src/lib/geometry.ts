@@ -4,6 +4,7 @@ import { Cartesian3, Color, CornerType, Cartographic, Entity, Viewer, Cartesian2
 
 // Some point at buckminster gliding club
 export const ORIGIN = Cartographic.fromDegrees(-0.7097051097617251, 52.830542659049435, 146 + 60); // approx airfield elevation ????
+export const HANDLE_POINT_RADIUS = 4;
 
 // to avoid instantiating objects continuously
 // may be premature optimisation but cesium does it so i will too
@@ -84,9 +85,28 @@ export class Line {
 		ctx.lineTo(b.x, b.y);
 		ctx.stroke();
 		ctx.beginPath();
-		ctx.arc(a.x, a.y, 3, 0, 2 * Math.PI);
-		ctx.arc(b.x, b.y, 3, 0, 2 * Math.PI);
+		ctx.arc(a.x, a.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
+		ctx.arc(b.x, b.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
 		ctx.fill();
+
+		let dir = new Cartesian2((b.x - a.x), (b.y - a.y));
+		if (Cartesian2.magnitudeSquared(dir) < 0.01) {
+		    return;
+		};
+
+		const tri_size = 10;
+		Cartesian2.normalize(dir, dir);
+		const norm = new Cartesian2(-dir.y, dir.x);
+		const midpoint_x = (a.x + b.x) / 2 - tri_size / 2 * dir.x;
+		const midpoint_y = (a.y + b.y) / 2 - tri_size / 2 * dir.y;
+		ctx.beginPath();
+		ctx.moveTo(midpoint_x + norm.x * tri_size / 2, midpoint_y + norm.y * tri_size / 2);
+		ctx.lineTo(midpoint_x - norm.x * tri_size / 2, midpoint_y - norm.y * tri_size / 2);
+		ctx.lineTo(midpoint_x + dir.x * tri_size, midpoint_y + dir.y * tri_size);
+		ctx.lineTo(midpoint_x + norm.x * tri_size / 2, midpoint_y + norm.y * tri_size / 2);
+		ctx.closePath();
+		ctx.fill();
+		
     }
 }
 
@@ -95,12 +115,14 @@ export class Arc {
     radius: number;
     theta0: number; // radians
     theta1: number; // >= theta0
-    constructor(centre: Local3, radius: number, theta0: number, theta1: number) {
+    direction: 1 | -1;
+    constructor(centre: Local3, radius: number, theta0: number, theta1: number, direction: 1 | -1) {
         this.centre = centre;
         this.radius = radius;
         this.theta0 = theta0;
         this.theta1 = theta1;
         // yes I did choose these names specifically to make them line up well
+        this.direction = direction;
     }
 
     toEntities(): Entity[] {
@@ -141,14 +163,14 @@ export class Arc {
         })];
     }
 
-    static from_centre_and_points(centre: Local3, a: Local3, b: Local3) {
-        let r = Local3.distance(centre, a);
-        let theta0 = -Math.atan2(a.y - centre.y, a.x - centre.x);
-        let theta1 = -Math.atan2(b.y - centre.y, b.x - centre.x);
-        return new Arc(centre, r, theta0, theta1);
+    static from_centre_and_points(centre: Local3, a: Local3, b: Local3, direction: 1 | -1) {
+        const r = Local3.distance(centre, a);
+        const theta0 = -Math.atan2(a.y - centre.y, a.x - centre.x);
+        const theta1 = -Math.atan2(b.y - centre.y, b.x - centre.x);
+        return new Arc(centre, r, theta0, theta1, direction);
     }
 
-    draw(ctx: CanvasRenderingContext2D, viewer: Viewer) {
+    draw(ctx: CanvasRenderingContext2D, viewer: Viewer, inhibit_endpoints?: boolean) {
 		const centre = viewer.scene.cartesianToCanvasCoordinates(
 			this.centre.toCartesian(),
 			scratchc3_a
@@ -160,11 +182,18 @@ export class Arc {
 		);
 		const rad = Cartesian2.distance(centre, rad_point);
 		ctx.beginPath();
-		ctx.arc(centre.x, centre.y, rad, this.theta0, this.theta1, true);
+		ctx.arc(centre.x, centre.y, rad, this.theta0, this.theta1, this.direction == -1);
 		ctx.stroke();
 		ctx.beginPath();
-		ctx.arc(centre.x, centre.y, 3, 0, 2 * Math.PI);
-		// ctx.arc(b.x, b.y, 3, 0, 2 * Math.PI); // TODO ends of the arc
+		ctx.arc(centre.x, centre.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
 		ctx.fill();
+		if (!inhibit_endpoints) {
+    		ctx.beginPath();
+    		ctx.arc(centre.x + rad * Math.cos(this.theta0), centre.y + rad * Math.sin(this.theta0), HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
+    		ctx.fill();
+    		ctx.beginPath();
+    		ctx.arc(centre.x + rad * Math.cos(this.theta1), centre.y + rad * Math.sin(this.theta1), HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
+    		ctx.fill();
+		}
     }
 }

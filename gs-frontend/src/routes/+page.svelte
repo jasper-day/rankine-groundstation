@@ -7,15 +7,9 @@
 		Math as CesiumMath,
 		Terrain,
 		Viewer,
-		Entity,
-		ScreenSpaceEventHandler,
-		ScreenSpaceEventType,
-		defined,
-		Matrix4,
-		Cartesian4,
 		Cartesian2
 	} from 'cesium';
-	import { Arc, Line, Local3, ORIGIN } from '$lib/geometry';
+	import { Arc, HANDLE_POINT_RADIUS, Line, Local3, ORIGIN } from '$lib/geometry';
 	import 'cesium/Build/Cesium/Widgets/widgets.css';
 	import { onMount } from 'svelte';
 
@@ -27,7 +21,8 @@
 	let ctx: CanvasRenderingContext2D | null = null;
 	let tool: 'Line' | 'Arc' | 'Empty' = 'Empty';
 	let intermediate_points: Local3[] = [];
-
+	let arc_direction_guess: 1 | -1 | undefined;
+	let prelim_arc_direction_guess: 1 | -1 | undefined; // this is for rendering the arc preview when we are not really confident in the direction guess yet
 	// to avoid instantiating objects continuously
 	// may be premature optimisation but cesium does it so i will too
 	let scratchc3_a: Cartesian3 = new Cartesian3();
@@ -82,9 +77,19 @@
 							let centre = intermediate_points[0];
 							let outer_point = mouse_local;
 							let r = Local3.distance(centre, outer_point);
-							new Arc(centre, r, 0, Math.PI * 2).draw(ctx, viewer);
+							new Arc(centre, r, 0, Math.PI * 2, 1).draw(ctx, viewer, true);
 						} else if (intermediate_points.length == 2) {
-							Arc.from_centre_and_points(intermediate_points[0], intermediate_points[1], mouse_local).draw(ctx, viewer);
+							let dir: 1 | -1;
+							if (arc_direction_guess === undefined) {
+								if (prelim_arc_direction_guess !== undefined) {
+									dir = prelim_arc_direction_guess;
+								} else {
+									dir = 1;
+								}
+							} else {
+								dir = arc_direction_guess;
+							}
+							Arc.from_centre_and_points(intermediate_points[0], intermediate_points[1], mouse_local, dir).draw(ctx, viewer);
 						}
 					}
 				}
@@ -117,22 +122,33 @@
 				if (intermediate_points.length < 2) {
 					intermediate_points.push(Local3.fromCartesian(cartesian));
 				} else {
-					shapes.push(Arc.from_centre_and_points(intermediate_points[0], intermediate_points[1], Local3.fromCartesian(cartesian)));
+					// we really should have a guess for the direction of the arc by now. Try to use a preliminary guess if we have one
+					if (arc_direction_guess === undefined) {
+						if (prelim_arc_direction_guess !== undefined) {
+							arc_direction_guess = prelim_arc_direction_guess;
+						} else {
+							arc_direction_guess = 1;
+						}
+					}
+					shapes.push(Arc.from_centre_and_points(intermediate_points[0], intermediate_points[1], Local3.fromCartesian(cartesian), arc_direction_guess));
+					arc_direction_guess = undefined;
+					prelim_arc_direction_guess = undefined;
 					intermediate_points = [];
 				}
 			} else if (tool == "Empty") {
 				// check for dragging
 				const mouse = new Cartesian2(event.clientX, event.clientY);
 				let idx = 0;
+				const max_sq_dist = HANDLE_POINT_RADIUS * HANDLE_POINT_RADIUS;
 				for (const s of shapes) {
 					if (s instanceof Line) {
 						const a = viewer.scene.cartesianToCanvasCoordinates(s.start.toCartesian(), scratchc3_a);
 						const b = viewer.scene.cartesianToCanvasCoordinates(s.end.toCartesian(), scratchc3_b);
 						
-						if (Cartesian2.distanceSquared(a, mouse) < 3 * 3) { // 3 is the radius of the little end points, TODO make this a constant
+						if (Cartesian2.distanceSquared(a, mouse) < max_sq_dist) {
 							drag_object = { shape_index: idx, point_index: 0 };
 						}
-						if (Cartesian2.distanceSquared(b, mouse) < 3 * 3) { // 3 is the radius of the little end points, TODO make this a constant
+						if (Cartesian2.distanceSquared(b, mouse) < max_sq_dist) {
 							drag_object = { shape_index: idx, point_index: 1 };
 						}
 					}
@@ -145,7 +161,7 @@
 		}
 	}
 
-	function mouseup(event: MouseEvent) {
+	function mouseup(_: MouseEvent) {
 		if (drag_object !== undefined) {
 			if (viewer) viewer.scene.screenSpaceCameraController.enableInputs = true;
 			drag_object = undefined;
@@ -160,8 +176,15 @@
 		} else if (event.key == "Escape") {
 			tool = 'Empty';
 			intermediate_points = [];
+			arc_direction_guess = undefined;
+			prelim_arc_direction_guess = undefined;
 		}
 		draw_tooltip(mouseX, mouseY);
+	}
+
+	function abs_angle(a: number): number {
+	 	const pi2 = Math.PI * 2;
+		return (pi2 + (a % pi2)) % pi2;
 	}
 
 	let cleared = false;
@@ -189,7 +212,37 @@
 				
 			}
 		}
-		// draw_tooltip(mouseX, mouseY);
+		// we are almost done making the arc, defining the last point, but we haven't figured out what direction it's going in yet (TODO inaccurate comment maybe)
+		if (tool == "Arc" && intermediate_points.length == 2 && viewer !== undefined) {
+			// guess
+			const centre = intermediate_points[0];
+			const a = intermediate_points[1];
+			const cartesian = viewer.camera.pickEllipsoid(
+				new Cartesian3(event.clientX, event.clientY),
+				viewer.scene.ellipsoid
+			);
+			// ignore invalid position...
+			if (cartesian === undefined) return;
+			const b = Local3.fromCartesian(cartesian);
+	        const theta0 = -Math.atan2(a.y - centre.y, a.x - centre.x);
+	        const theta1 = -Math.atan2(b.y - centre.y, b.x - centre.x);
+
+	        // this is awful and slow
+	        // why is it so hard to find the signed difference between two angles??
+	        let delta = Math.atan2(Math.sin(theta0 - theta1), Math.cos(theta0 - theta1));
+	        prelim_arc_direction_guess = delta > 0 ? -1 : 1;
+	        // don't guess for very tiny (possibly zero) difference
+	        // in fact, reset so we can guess again
+	        if (Math.abs(delta) < 0.15) {
+	        	arc_direction_guess = undefined;
+	        	return;
+	        }
+
+	        // do not overwrite an existing guess
+			if (arc_direction_guess === undefined) {
+		        arc_direction_guess = prelim_arc_direction_guess;
+	        }
+		}
 	}
 
 	function draw_tooltip(x: number, y: number) {
