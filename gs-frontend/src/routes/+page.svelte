@@ -98,6 +98,10 @@
 
 		// Add Cesium OSM Buildings, a global 3D buildings layer.
 		// createOsmBuildingsAsync().then((buildingTileset) => viewer.scene.primitives.add(buildingTileset));
+		
+		// Chrome doesn't support mouse events
+		viewer.cesiumWidget.canvas.addEventListener("pointerdown", mousedown);
+		viewer.cesiumWidget.canvas.addEventListener("pointerup", mouseup);
 	});
 
 	let drag_object: { shape_index: number, point_index: number } | undefined = undefined;
@@ -278,7 +282,5 @@
 <div
 	id="cesiumContainer"
 	style="height:max-content; z-index: 1;position:relative;"
-	on:mousedown={mousedown}
-	on:mouseup={mouseup}
 ></div>
 <svelte:window on:keydown={keypress} on:mousemove|preventDefault={mousemove} />
