@@ -2,6 +2,11 @@
     // TODO !IMPORTANT
     // you can make the path segments out of order
     // huh
+    // move arcs
+    // undo
+    // delete
+    // look into pointer events in chrome (no drag?)
+    // canvas resizing
     import "cesium/Build/Cesium/Widgets/widgets.css";
 
     import { Cartesian3, Ion, Math as CesiumMath, Terrain, Viewer, Cartesian2 } from "cesium";
@@ -21,7 +26,7 @@
         }
         async close_path() {
             let s_shapes = this.shapes.map((sh) => sh.serialise());
-            let response = await n.request({ op: "path:solve", data: { "path": s_shapes } });
+            let response = await n.request({ op: "path:solve", data: { path: s_shapes } });
             console.log("Got response", response);
             if (response instanceof ConnectionError) {
                 // idk how to handle this TODO
