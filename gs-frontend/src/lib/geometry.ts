@@ -84,20 +84,6 @@ export class Line {
         this.end = end;
     }
 
-    toEntity(): Entity {
-        return new Entity({
-            name: "",
-            corridor: {
-                positions: [this.start.toCartesian(), this.end.toCartesian()],
-                height: ORIGIN.height,
-                width: 2.0,
-                cornerType: CornerType.MITERED,
-                material: Color.RED,
-                outline: false
-            }
-        });
-    }
-
     draw(ctx: CanvasRenderingContext2D, viewer: Viewer) {
         // TODO cache these?
         const a = viewer.scene.cartesianToCanvasCoordinates(this.start.toCartesian(), scratchc3_a);
@@ -172,44 +158,6 @@ export class Arc {
             d.direction
         );
     }
-
-    // toEntities(): Entity[] {
-    //     let vertices = [];
-    //     let theta = this.theta0;
-
-    //     while (theta < this.theta1) {
-    //         const x = this.centre.x + this.radius * Math.cos(theta);
-    //         const y = this.centre.y + this.radius * Math.sin(theta);
-    //         vertices.push(new Local3(x, y, this.centre.z).toCartesian());
-    //         theta += 0.05
-    //     }
-    //     return [new Entity({
-    //         name: "",
-    //         // polyline: {
-    //         //   positions: vertices,
-    //         //   width: 2.0,
-    //         //   material: Color.RED,
-    //         // },
-    //         corridor: {
-    //             positions: vertices,
-    //             height: ORIGIN.height,
-    //             width: 2.0,
-    //             cornerType: CornerType.MITERED,
-    //             material: Color.RED,
-    //             outline: false,
-    //         },
-    //     }),
-    //     new Entity({
-    //         name: "",
-    //         position: this.centre.toCartesian(),
-    //         ellipse: {
-    //             semiMinorAxis: 0.8,
-    //             semiMajorAxis: 0.8,
-    //             height: ORIGIN.height,
-    //             material: Color.RED,
-    //         }
-    //     })];
-    // }
 
     static from_centre_and_points(centre: Local3, a: Local3, b: Local3, direction: 1 | -1) {
         const r = Local3.distance(centre, a);
