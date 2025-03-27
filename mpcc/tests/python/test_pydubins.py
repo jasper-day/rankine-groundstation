@@ -118,3 +118,10 @@ def test_path_eval():
 def test_types():
     assert ls1.type == SegmentType.LINESEGMENT
     assert cs1.type == SegmentType.CIRCULARSEGMENT
+    assert path.get_types() == [
+        SegmentType.LINESEGMENT,
+        SegmentType.CIRCULARSEGMENT,
+        SegmentType.LINESEGMENT,
+        SegmentType.CIRCULARSEGMENT,
+        SegmentType.CIRCULARSEGMENT
+    ]
