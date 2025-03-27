@@ -221,16 +221,21 @@ export class Arc {
 
     draw(ctx: CanvasRenderingContext2D, viewer: Viewer, inhibit_endpoints?: boolean) {
         const centre = viewer.scene.cartesianToCanvasCoordinates(this.centre.toCartesian(), scratchc3_a);
+        const rad_point_local = new Local3(this.centre.x + this.radius, this.centre.y, this.centre.z);
+        const rad_point_screen = viewer.scene.cartesianToCanvasCoordinates(rad_point_local.toCartesian());
+        const rad = Cartesian2.distance(centre, rad_point_screen);
+        const x_axis = new Cartesian2();
+        Cartesian2.subtract(rad_point_screen, centre, x_axis);
+        const dtheta = Math.atan2(x_axis.y, x_axis.x);
+    
+        const theta0 = ang_mod(this.theta0 + dtheta);
         const arc_length = this.direction == 1 ? this.dangle : -this.dangle;
-        const theta1 = ang_mod(this.theta0 + arc_length);
-        const half_theta = ang_mod(this.theta0 + arc_length / 2);
+        const theta1 = ang_mod(theta0 + arc_length);
+        const half_theta = ang_mod(theta0 + arc_length / 2);
 
         // hack to get the radius in screen space
-        const rad_point_local = new Local3(this.centre.x + this.radius, this.centre.y, this.centre.z);
-        let rad_point_screen = viewer.scene.cartesianToCanvasCoordinates(rad_point_local.toCartesian());
-        const rad = Cartesian2.distance(centre, rad_point_screen);
         ctx.beginPath();
-        ctx.arc(centre.x, centre.y, rad, this.theta0, theta1, this.direction == -1);
+        ctx.arc(centre.x, centre.y, rad, theta0, theta1, this.direction == -1);
         ctx.stroke();
         ctx.beginPath();
         ctx.arc(centre.x, centre.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
@@ -238,8 +243,8 @@ export class Arc {
         if (!inhibit_endpoints) {
             ctx.beginPath();
             ctx.arc(
-                centre.x + rad * Math.cos(this.theta0),
-                centre.y + rad * Math.sin(this.theta0),
+                centre.x + rad * Math.cos(theta0),
+                centre.y + rad * Math.sin(theta0),
                 HANDLE_POINT_RADIUS,
                 0,
                 2 * Math.PI
