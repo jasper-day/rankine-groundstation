@@ -111,7 +111,8 @@ PYBIND11_MODULE(pydubins, m) {
              return self.get_constraint_residuals(drake::VectorX<T>(values));
            })
       .def("n_params", &DubinsPath<T>::n_params)
-      .def("n_constraints", &DubinsPath<T>::n_constraints);
+      .def("n_constraints", &DubinsPath<T>::n_constraints)
+      .def("get_types", &DubinsPath<T>::get_types);
   // don't bind `to_drake` -- missing pydrake bindings.
 
   py::class_<DubinsSolver>(m, "DubinsSolver")
