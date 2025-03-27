@@ -45,7 +45,7 @@ async def handle_messages(websocket) -> None:
             continue
 
         if "op" not in message:
-            await throw_error("No operation specified!")
+            await throw_error("No operation specified!", replying_to=message["i"])
             continue
 
         packet = Packet(websocket, message)
