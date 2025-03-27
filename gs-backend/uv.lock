@@ -156,7 +156,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "mpcc", directory = "../mpcc" },
+    { name = "mpcc", path = "../mpcc/dist/mpcc-0.1.0-cp310-cp310-linux_x86_64.whl" },
     { name = "pydantic", specifier = ">=2.10.6" },
     { name = "websockets", specifier = ">=15.0.1" },
 ]
@@ -303,10 +303,13 @@ wheels = [
 [[package]]
 name = "mpcc"
 version = "0.1.0"
-source = { directory = "../mpcc" }
+source = { path = "../mpcc/dist/mpcc-0.1.0-cp310-cp310-linux_x86_64.whl" }
 dependencies = [
     { name = "drake" },
     { name = "numpy" },
+]
+wheels = [
+    { filename = "mpcc-0.1.0-cp310-cp310-linux_x86_64.whl", hash = "sha256:2d15352cea96fcef0d56144635e974c074671eba4f8a89a6e75fbdbfbc4069e9" },
 ]
 
 [package.metadata]
@@ -318,14 +321,6 @@ requires-dist = [
     { name = "scikit-build-core", marker = "extra == 'dev'", specifier = ">=0.10" },
 ]
 provides-extras = ["dev"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "fastapi", specifier = ">=0.115.11" },
-    { name = "ipython", specifier = ">=8.34.0" },
-    { name = "matplotlib", specifier = ">=3.10.1" },
-    { name = "pytest", specifier = ">=8.3.5" },
-]
 
 [[package]]
 name = "numpy"
