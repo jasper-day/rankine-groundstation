@@ -18,6 +18,12 @@ PYBIND11_MODULE(pydubins, m) {
 
   py::module::import("pydrake.trajectories");
 
+  py::enum_<SegmentType>(m, "SegmentType")
+      .value("SEGMENT", SegmentType::SEGMENT)
+      .value("LINESEGMENT", SegmentType::LINESEGMENT)
+      .value("CIRCULARSEGMENT", SegmentType::CIRCULARSEGMENT)
+      .export_values();
+
   using T = double;
   // Bind the Segment base class
   py::class_<Segment<T>, std::shared_ptr<Segment<T>>>(m, "Segment")
@@ -29,7 +35,8 @@ PYBIND11_MODULE(pydubins, m) {
       .def("heading_end", &Segment<T>::heading_end)
       .def("eval", &Segment<T>::eval)
       .def("get_params", &Segment<T>::get_params)
-      .def("set_params", &Segment<T>::set_params);
+      .def("set_params", &Segment<T>::set_params)
+      .def_readonly("type", &Segment<T>::type);
 
   // Bind the LineSegment class
   py::class_<LineSegment<T>, Segment<T>, std::shared_ptr<LineSegment<T>>>(
@@ -48,7 +55,8 @@ PYBIND11_MODULE(pydubins, m) {
       .def("heading_end", &LineSegment<T>::heading_end)
       .def("eval", &LineSegment<T>::eval)
       .def("get_params", &LineSegment<T>::get_params)
-      .def("set_params", &LineSegment<T>::set_params);
+      .def("set_params", &LineSegment<T>::set_params)
+      .def_readonly("type", &LineSegment<T>::type);
 
   // Bind the CircularSegment class
   py::class_<CircularSegment<T>, Segment<T>,
@@ -68,7 +76,8 @@ PYBIND11_MODULE(pydubins, m) {
       .def("heading_end", &CircularSegment<T>::heading_end)
       .def("eval", &CircularSegment<T>::eval)
       .def("get_params", &CircularSegment<T>::get_params)
-      .def("set_params", &CircularSegment<T>::set_params);
+      .def("set_params", &CircularSegment<T>::set_params)
+      .def_readonly("type", &CircularSegment<T>::type);
 
   // Bind the DubinsPath class
   py::class_<DubinsPath<T>>(m, "DubinsPath")
