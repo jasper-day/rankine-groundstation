@@ -4,6 +4,7 @@ from utils import *
 from packet import Packet
 from protocol_ws import protocol_ws
 from protocol_mav import protocol_mav
+from protocol_path import protocol_path
 from websockets.asyncio.server import serve
 
 # {
@@ -56,6 +57,8 @@ async def handle_messages(websocket) -> None:
                     await protocol_ws(packet)
                 case "mav":
                     await protocol_mav(packet)
+                case "path":
+                    await protocol_path(packet)
                 case _:
                     await packet.error("Invalid protocol!")
         except Exception as e:
