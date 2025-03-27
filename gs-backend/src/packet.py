@@ -26,7 +26,7 @@ class Packet:
         message = {
             "i": 0,
             "op": op,
-            "replying_to": self.id
+            "r": self.id
         }
 
         if data is not None:
