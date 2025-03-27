@@ -1,22 +1,23 @@
-from pydantic import BaseModel, TypeAdapter
-from typing import Literal
+from pydantic import BaseModel, TypeAdapter, Discriminator
+from typing import Literal, Union
+from typing_extensions import Annotated
 from mpcc.pydubins import DubinsPath, LineSegment, CircularSegment, SegmentType, DubinsSolver
 import numpy as np
 
 class Arc(BaseModel):
     type: Literal["arc"] = "arc"
-    center: list[float]
+    centre: list[float]
     radius: float
-    dir: float
+    direction: float
     heading: float
     arclength: float
     def to_dubins(self):
-        assert len(self.center) == 2
-        assert np.isclose(self.dir, 1) or np.isclose(self.dir, -1)
+        assert len(self.centre) == 2
+        assert np.isclose(self.direction, 1) or np.isclose(self.direction, -1)
         return CircularSegment(
-            center=np.array(self.center, np.float64),
+            center=np.array(self.centre, np.float64),
             radius=self.radius,
-            dir=self.dir,
+            dir=self.direction,
             heading=self.heading,
             arclength=self.arclength,
         )
@@ -34,11 +35,16 @@ class Line(BaseModel):
             end=np.array(self.end, np.float64)
         )
 
-Segment = Arc | Line
 
-Path = list[Segment]
 
-path_adapter = TypeAdapter(Path)
+path_adapter = TypeAdapter(list[
+    Annotated[
+    Union[Arc, Line],
+    Discriminator('type')
+    ]
+    ])
+
+Path = list[Union[Arc, Line]]
 
 def to_dubins(path: Path) -> DubinsPath:
     segments = [segment.to_dubins() for segment in path]
@@ -63,9 +69,9 @@ def to_path(dubins: DubinsPath, params: np.ndarray[np.float64]) -> Path:
             case SegmentType.CIRCULARSEGMENT:
                 path.append(
                     Arc(
-                        center=[params[index], params[index+1]],
+                        centre=[params[index], params[index+1]],
                         radius=params[index+2],
-                        dir=params[index+3],
+                        direction=params[index+3],
                         heading=params[index+4],
                         arclength=params[index+5]
                     )
