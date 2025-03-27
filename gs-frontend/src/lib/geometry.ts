@@ -145,7 +145,8 @@ export class Arc {
             centre: [this.centre.y, this.centre.x], // swap x and y for NED
             heading: ang_mod(Math.PI / 2 - this.theta0),
             arclength: this.dangle * this.radius,
-            direction: this.direction
+            direction: this.direction,
+            radius: this.radius
         };
     }
 
@@ -175,7 +176,7 @@ export class Arc {
         const x_axis = new Cartesian2();
         Cartesian2.subtract(rad_point_screen, centre, x_axis);
         const dtheta = Math.atan2(x_axis.y, x_axis.x);
-    
+
         const theta0 = ang_mod(this.theta0 + dtheta);
         const arc_length = this.direction == 1 ? this.dangle : -this.dangle;
         const theta1 = ang_mod(theta0 + arc_length);
