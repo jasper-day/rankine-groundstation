@@ -97,6 +97,16 @@ class DubinsPath {
   /// Get value of all parameters
   drake::VectorX<T> get_params() const;
 
+  /// Get types of all parameters
+  std::vector<SegmentType> get_types() const {
+    std::vector<SegmentType> output;
+    output.reserve(num_segments());
+    std::transform(segments_.begin(), segments_.end(),
+                   std::back_inserter(output),
+                   [](const auto segment) { return segment->type; });
+    return output;
+  }
+
   /// Set current path state (value of all parameters)
   void set_params(drake::VectorX<T> params);
 

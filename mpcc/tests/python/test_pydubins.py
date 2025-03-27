@@ -1,4 +1,4 @@
-from mpcc.pydubins import LineSegment, CircularSegment, DubinsPath
+from mpcc.pydubins import LineSegment, CircularSegment, DubinsPath, SegmentType
 from pytest import approx
 import numpy as np
 
@@ -114,3 +114,14 @@ def test_path_eval():
     assert path.eval(0) == approx(ls1.start())
     assert path.eval(ls1.length()) == approx(cs1.start())
     assert path.eval(ls1.length() + cs1.length()) == approx(ls2.start())
+
+def test_types():
+    assert ls1.type == SegmentType.LINESEGMENT
+    assert cs1.type == SegmentType.CIRCULARSEGMENT
+    assert path.get_types() == [
+        SegmentType.LINESEGMENT,
+        SegmentType.CIRCULARSEGMENT,
+        SegmentType.LINESEGMENT,
+        SegmentType.CIRCULARSEGMENT,
+        SegmentType.CIRCULARSEGMENT
+    ]
