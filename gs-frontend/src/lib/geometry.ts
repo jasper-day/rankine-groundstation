@@ -128,20 +128,49 @@ export class Line {
         ctx.closePath();
         ctx.fill();
     }
+
+    serialise(): any {
+        // swap x and y for NED
+        return { type: "line", start: [this.start.y, this.start.x], end: [this.end.y, this.end.x] };
+    }
+
+    static deserialise(d: any): Line {
+        return new Line(new Local3(d.start.y, d.start.x, 0.0), new Local3(d.end.y, d.end.x, 0.0));
+    }
 }
 
 export class Arc {
     centre: Local3;
     radius: number;
     theta0: number; // radians
-    arc_length: number; // radians ??
+    dangle: number; // radians
     direction: 1 | -1;
-    constructor(centre: Local3, radius: number, theta0: number, arc_length: number, direction: 1 | -1) {
+    constructor(centre: Local3, radius: number, theta0: number, dangle: number, direction: 1 | -1) {
         this.centre = centre;
         this.radius = radius;
         this.theta0 = theta0;
-        this.arc_length = arc_length;
+        this.dangle = dangle;
         this.direction = direction;
+    }
+
+    serialise(): any {
+        return {
+            type: "arc",
+            centre: [this.centre.y, this.centre.x], // swap x and y for NED
+            heading: ang_mod(Math.PI / 2 - this.theta0),
+            arclength: this.dangle * this.radius,
+            direction: this.direction
+        };
+    }
+
+    static deserialise(d: any): Arc {
+        return new Arc(
+            new Local3(d.centre.y, d.centre.x, 0),
+            d.radius,
+            -(d.heading - Math.PI / 2),
+            d.arclength / d.radius,
+            d.direction
+        );
     }
 
     // toEntities(): Entity[] {
@@ -192,7 +221,7 @@ export class Arc {
 
     draw(ctx: CanvasRenderingContext2D, viewer: Viewer, inhibit_endpoints?: boolean) {
         const centre = viewer.scene.cartesianToCanvasCoordinates(this.centre.toCartesian(), scratchc3_a);
-        const arc_length = this.direction == 1 ? this.arc_length : -this.arc_length;
+        const arc_length = this.direction == 1 ? this.dangle : -this.dangle;
         const theta1 = ang_mod(this.theta0 + arc_length);
         const half_theta = ang_mod(this.theta0 + arc_length / 2);
 

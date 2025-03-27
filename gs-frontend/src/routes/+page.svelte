@@ -1,25 +1,63 @@
 <script lang="ts">
+    // TODO !IMPORTANT
+    // you can make the path segments out of order
+    // huh
     import "cesium/Build/Cesium/Widgets/widgets.css";
 
     import { Cartesian3, Ion, Math as CesiumMath, Terrain, Viewer, Cartesian2 } from "cesium";
-    import { angle_delta, Arc, HANDLE_POINT_RADIUS, Line, Local3, ORIGIN } from "$lib/geometry";
+    import { Arc, HANDLE_POINT_RADIUS, Line, Local3, ORIGIN } from "$lib/geometry";
+    import { ConnectionError, Network, ServerError } from "$lib/network";
     import "cesium/Build/Cesium/Widgets/widgets.css";
     import { onMount } from "svelte";
 
     Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN;
 
-    const shapes: (Arc | Line)[] = []; // [new Arc(new Local3(0, 0, 0), 20, Math.PI / 2, (Math.PI * 3) / 2)];
+    class Shapes {
+        shapes: (Arc | Line)[] = [];
+        constructor() {}
+
+        add_shape(s: Arc | Line) {
+            this.shapes.push(s);
+        }
+        async close_path() {
+            let s_shapes = this.shapes.map((sh) => sh.serialise());
+            let response = await n.request({ op: "path:solve", data: { "path": s_shapes } });
+            console.log("Got response", response);
+            if (response instanceof ConnectionError) {
+                // idk how to handle this TODO
+            } else if (response instanceof ServerError) {
+                console.log(
+                    `The server responded with error message '${response.message}' for packet '${JSON.stringify(response.request)}'`
+                );
+            } else {
+                this.shapes = response.get("shapes").map((ds: Map<string, any>) => {
+                    if (ds.get("type") == "arc") {
+                        return Arc.deserialise(ds);
+                    } else if (ds.get("type") == "line") {
+                        return Line.deserialise(ds);
+                    }
+                });
+            }
+        }
+    }
+
+    const shapes = new Shapes();
 
     let viewer: Viewer | undefined;
     let ctx: CanvasRenderingContext2D | null = null;
     let tool: "Line" | "Arc" | "Empty" = "Empty";
+    let editing_mode: "Create" | "Edit" = "Create";
     let intermediate_points: Local3[] = [];
     let arc_direction_guess: 1 | -1 | undefined;
     let prelim_arc_direction_guess: 1 | -1 | undefined; // this is for rendering the arc preview when we are not really confident in the direction guess yet
+
     // to avoid instantiating objects continuously
     // may be premature optimisation but cesium does it so i will too
-    let scratchc3_a: Cartesian3 = new Cartesian3();
-    let scratchc3_b: Cartesian3 = new Cartesian3();
+    const scratchc3_a: Cartesian3 = new Cartesian3();
+    const scratchc3_b: Cartesian3 = new Cartesian3();
+
+    let n = new Network();
+    n.connect().then(console.log); // TODO handle errors
 
     onMount(() => {
         // Initialize the Cesium Viewer in the HTML element with the `cesiumContainer` ID.
@@ -27,6 +65,7 @@
             terrain: Terrain.fromWorldTerrain()
         });
         ctx = canvas.getContext("2d");
+        // TODO update this when window resizes
         canvas.width = viewer.canvas.width;
         canvas.height = viewer.canvas.height;
 
@@ -47,7 +86,7 @@
                 draw_tooltip(mouseX, mouseY);
                 ctx.strokeStyle = "yellow";
                 ctx.fillStyle = "#ffd040";
-                for (const s of shapes) {
+                for (const s of shapes.shapes) {
                     s.draw(ctx, viewer);
                 }
 
@@ -116,7 +155,7 @@
                     // add first point
                     intermediate_points.push(Local3.fromCartesian(cartesian));
                 } else {
-                    shapes.push(new Line(intermediate_points[0], Local3.fromCartesian(cartesian)));
+                    shapes.add_shape(new Line(intermediate_points[0], Local3.fromCartesian(cartesian)));
                     intermediate_points = [];
                 }
             } else if (tool == "Arc") {
@@ -131,7 +170,7 @@
                             arc_direction_guess = 1;
                         }
                     }
-                    shapes.push(
+                    shapes.add_shape(
                         Arc.from_centre_and_points(
                             intermediate_points[0],
                             intermediate_points[1],
@@ -148,7 +187,7 @@
                 const mouse = new Cartesian2(event.clientX, event.clientY);
                 let idx = 0;
                 const max_sq_dist = HANDLE_POINT_RADIUS * HANDLE_POINT_RADIUS;
-                for (const s of shapes) {
+                for (const s of shapes.shapes) {
                     if (s instanceof Line) {
                         const a = viewer.scene.cartesianToCanvasCoordinates(s.start.toCartesian(), scratchc3_a);
                         const b = viewer.scene.cartesianToCanvasCoordinates(s.end.toCartesian(), scratchc3_b);
@@ -186,11 +225,15 @@
             intermediate_points = [];
             arc_direction_guess = undefined;
             prelim_arc_direction_guess = undefined;
+        } else if (event.key == "c") {
+            editing_mode = "Create";
+        } else if (event.key == "e") {
+            shapes.close_path();
+            editing_mode = "Edit";
         }
         draw_tooltip(mouseX, mouseY);
     }
 
-    let cleared = false;
     let mouseX: number, mouseY: number;
     function mousemove(event: MouseEvent) {
         mouseX = event.clientX;
@@ -200,7 +243,7 @@
             const cartesian = viewer.camera.pickEllipsoid(new Cartesian3(event.clientX, event.clientY), ellipsoid);
             if (!cartesian) return; // just ignore an invalid position
             let local = Local3.fromCartesian(cartesian);
-            let s = shapes[drag_object.shape_index];
+            let s = shapes.shapes[drag_object.shape_index];
             if (s instanceof Line) {
                 if (drag_object.point_index == 0) {
                     s.start = local;
@@ -209,6 +252,10 @@
                     s.end = local;
                 }
             } else if (s instanceof Arc) {
+            }
+
+            if (editing_mode == "Edit") {
+                shapes.close_path();
             }
         }
         // we are almost done making the arc, defining the last point, but we haven't figured out what direction it's going in yet (TODO inaccurate comment maybe)
@@ -243,7 +290,7 @@
             // 	  dir = Math.sign(side);
             // console.log(dir, side);
             //       prelim_arc_direction_guess = dir == 1 ? 1 : -1;
-            // 
+            //
             const theta0 = -Math.atan2(a.y - centre.y, a.x - centre.x);
             const theta1 = -Math.atan2(b.y - centre.y, b.x - centre.x);
 
@@ -267,19 +314,25 @@
         }
     }
 
-    function draw_tooltip(x: number, y: number) {
-        if (tool === "Empty" && cleared) {
+    function draw_tooltip(nx: number, ny: number) {
+        if (ctx && editing_mode == "Create") {
+            ctx.strokeStyle = "red";
+            const x = nx;
+            const y = ny - 16;
+            let d = 6;
+            ctx.beginPath();
+            ctx.moveTo(x - d, y);
+            ctx.lineTo(x + d, y);
+            ctx.moveTo(x, y + d);
+            ctx.lineTo(x, y - d);
+            ctx.stroke();
+        }
+        if (tool === "Empty") {
             return;
         }
         if (ctx) {
-            // ctx.clearRect(0, 0, canvas.width, canvas.height);
-            if (tool === "Empty" && !cleared) {
-                cleared = true;
-                return;
-            }
-            cleared = false;
-            x -= 16;
-            y += 16;
+            const x = nx - 16;
+            const y = ny + 16;
             ctx.strokeStyle = "red";
             if (tool == "Arc") {
                 ctx.beginPath();
