@@ -1,7 +1,6 @@
 <script lang="ts">
     // TODO !IMPORTANT
     // you can make the path segments out of order
-    // huh
     // move arcs
     // undo
     // delete
@@ -206,6 +205,11 @@
                         if (Cartesian2.distanceSquared(b, mouse) < max_sq_dist) {
                             drag_object = { shape_index: idx, point_index: 1 };
                         }
+                    } else if (s instanceof Arc) {
+                        const c = viewer.scene.cartesianToCanvasCoordinates(s.centre.toCartesian(), scratchc3_a);
+                        if (Cartesian2.distanceSquared(c, mouse) < max_sq_dist) {
+                            drag_object = { shape_index: idx, point_index: 0 };
+                        }
                     }
                     idx += 1;
                 }
@@ -260,6 +264,16 @@
                     s.end = local;
                 }
             } else if (s instanceof Arc) {
+                if (drag_object.point_index == 0) {
+                    // move centre
+                    s.centre = local;
+                } else {
+                    // const { centre, rad, theta0, theta1 } = s.get_screenspace_params(viewer);
+                    // let keep_point;
+                    // if (drag_object.point_index == 1) keep_point = s.get_endpoint(centre, rad, theta1);
+                    // else keep_point = s.get_endpoint(centre, rad, theta0);
+                    // const new_s = Arc.from_centre_and_points()
+                }
             }
 
             if (editing_mode == "Edit") {
