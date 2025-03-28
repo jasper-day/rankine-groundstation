@@ -3,6 +3,7 @@ from typing import Literal, Union
 from typing_extensions import Annotated
 from mpcc.pydubins import DubinsPath, LineSegment, CircularSegment, SegmentType, DubinsSolver
 import numpy as np
+import matplotlib.pyplot as plt
 
 class Arc(BaseModel):
     type: Literal["arc"] = "arc"
@@ -12,6 +13,7 @@ class Arc(BaseModel):
     heading: float
     arclength: float
     def to_dubins(self):
+        print("Creating Dubins Circular segment")
         assert len(self.centre) == 2
         assert np.isclose(self.direction, 1) or np.isclose(self.direction, -1)
         return CircularSegment(
@@ -28,6 +30,7 @@ class Line(BaseModel):
     start: list[float]
     end: list[float]
     def to_dubins(self):
+        print("Creating Dubins Line segment")
         assert len(self.start) == 2
         assert len(self.end) == 2
         return LineSegment(
@@ -48,7 +51,7 @@ Path = list[Union[Arc, Line]]
 
 def to_dubins(path: Path) -> DubinsPath:
     segments = [segment.to_dubins() for segment in path]
-    return DubinsPath(segments)
+    return DubinsPath(segments), segments
 
 
 def to_path(dubins: DubinsPath, params: np.ndarray[np.float64]) -> Path:
@@ -80,8 +83,21 @@ def to_path(dubins: DubinsPath, params: np.ndarray[np.float64]) -> Path:
     return path
 
 def solve(path: Path) -> Path:
-    solver = DubinsSolver()
-    dubins = to_dubins(path)
+    print("solving path")
+    solver = DubinsSolver(tolerance=1e-3, max_iter=50, debug=1)
+    dubins, segments = to_dubins(path)
+    th = np.linspace(0, dubins.length(), 200)
+    locs = np.array([dubins.eval(t) for t in th])
+    plt.plot(locs[:, 1], locs[:, 0])
+    plt.xlabel("Easting, m")
+    plt.ylabel("Northing, m")
+    i = 0
+    for segment in segments:
+        plt.annotate(f"{i}", xy=np.flip(segment.start()))
+        plt.annotate(f"{i+1}", xy=np.flip(segment.end()))
+        i += 2
+    plt.gca().set_aspect("equal")
+    plt.show()
     params = solver.solve(dubins, [False])
     return to_path(dubins, params)
 
