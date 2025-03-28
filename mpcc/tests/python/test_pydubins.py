@@ -11,10 +11,10 @@ def create_test_segments():
     5. Circular segment with center (50, 35), radius 5, direction -1, heading pi, arclength 5pi
     """
     ls1 = LineSegment(np.array([10.0, 0.0]), np.array([10.0, 20.0]))
-    cs1 = CircularSegment(np.array([15, 20]), 5, -1, np.pi, 5 * np.pi/2)
+    cs1 = CircularSegment(np.array([15, 20]), 5, np.pi, -5 * np.pi/2)
     ls2 = LineSegment(np.array([15, 25]), np.array([35, 25]))
-    cs2 = CircularSegment(np.array([35,35]), 10, 1, -np.pi/2, 10 * np.pi/2)
-    cs3 = CircularSegment(np.array([50, 35]), 5, -1, np.pi, 5 * np.pi)
+    cs2 = CircularSegment(np.array([35,35]), 10, -np.pi/2, 10 * np.pi/2)
+    cs3 = CircularSegment(np.array([50, 35]), 5, np.pi, -5 * np.pi)
 
     return ls1, cs1, ls2, cs2, cs3
 
@@ -27,12 +27,12 @@ path = DubinsPath([ls1, cs1, ls2, cs2, cs3])
 
 def test_get_params():
     assert ls1.get_params().shape == (4,)
-    assert cs1.get_params().shape == (6,)
+    assert cs1.get_params().shape == (5,)
     assert ls1.get_params() == approx(np.array([10.0, 0.0, 10.0, 20.0]))
-    assert cs1.get_params() == approx(np.array([15.0, 20.0, 5.0, -1.0, np.pi, 5.0 * np.pi / 2.0]))
+    assert cs1.get_params() == approx(np.array([15.0, 20.0, 5.0, np.pi, -5.0 * np.pi / 2.0]))
     assert ls2.get_params() == approx(np.array([15.0, 25.0, 35.0, 25.0]))
-    assert cs2.get_params() == approx(np.array([35.0, 35.0, 10.0, 1.0, -np.pi / 2.0, 10.0 * np.pi / 2.0]))
-    assert cs3.get_params() == approx(np.array([50.0, 35.0, 5.0, -1.0, np.pi, 5.0 * np.pi]))
+    assert cs2.get_params() == approx(np.array([35.0, 35.0, 10.0, -np.pi / 2.0, 10.0 * np.pi / 2.0]))
+    assert cs3.get_params() == approx(np.array([50.0, 35.0, 5.0, np.pi, -5.0 * np.pi]))
 
 def test_get_path_params():
     assert path.get_params() == approx(

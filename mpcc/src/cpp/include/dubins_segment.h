@@ -150,12 +150,11 @@ class CircularSegment final : public Segment<T> {
   }
   ~CircularSegment() = default;
   // Constructor with all parameters
-  CircularSegment(const drake::Vector2<T>& center_in, T radius_in, T dir_in,
-                  T heading_in, T arclength_in)
+  CircularSegment(const drake::Vector2<T>& center_in, T radius_in, T heading_in,
+                  T arclength_in)
       : Segment<T>(),
-        center_(center_in),
+        centre_(center_in),
         radius_(radius_in),
-        dir_(dir_in),
         heading_(heading_in),
         arclength_(arclength_in) {
     this->type = SegmentType::CIRCULARSEGMENT;
@@ -165,37 +164,45 @@ class CircularSegment final : public Segment<T> {
   template <typename U>
   explicit CircularSegment(const CircularSegment<U>& other)
       : Segment<T>(other),
-        center_(other.center_),
+        centre_(other.centre_),
         radius_(other.radius_),
-        dir_(other.dir_),
         heading_(other.heading_),
         arclength_(other.arclength_) {
     this->type = SegmentType::CIRCULARSEGMENT;
   }
 
   drake::Vector2<T> path_coords(drake::Vector2<T> point) const override;
-  T length() const override { return arclength_; }
+  T length() const override {
+    using std::abs;
+    return abs(arclength_);
+  }
   drake::Vector2<T> start() const override;
   drake::Vector2<T> end() const override;
-  T heading_start() const override { return heading_ + dir_ * M_PI / 2; }
+  T heading_start() const override {
+    if (arclength_ == T(0))
+      throw std::runtime_error("Cannot find heading with zero arclength");
+    else if (arclength_ > T(0))
+      return heading_ + M_PI / 2;
+    else
+      return heading_ - M_PI / 2;
+  }
   T heading_end() const override {
-    return heading_start() + dir_ * arclength_ / radius_;
+    return heading_start() + arclength_ / radius_;
   }
   drake::Vector2<T> eval(T arclength) const override;
 
   drake::VectorX<T> get_params() const override {
-    drake::VectorX<T> output(6);
-    output << center_, radius_, dir_, heading_, arclength_;
+    drake::VectorX<T> output(5);
+    output << centre_, radius_, heading_, arclength_;
     return output;
   }
 
   void set_params(const drake::VectorX<T>& params) override {
-    drake::Vector<T, 6> input = params;
-    center_ = input.segment(0, 2);
+    drake::Vector<T, 5> input = params;
+    centre_ = input.segment(0, 2);
     radius_ = input(2);
-    dir_ = input(3);
-    heading_ = input(4);
-    arclength_ = input(5);
+    heading_ = input(3);
+    arclength_ = input(4);
   }
 
   template <typename U>
@@ -205,11 +212,11 @@ class CircularSegment final : public Segment<T> {
   friend class DubinsPath;
 
  private:
-  drake::Vector2<T> center_;
+  drake::Vector2<T> centre_;
   T radius_;
-  T dir_;
   T heading_;
   T arclength_;
+  T dir() const { return (arclength_ > T(0)) ? T(1) : T(-1); }
 };
 
 }  // namespace dubins

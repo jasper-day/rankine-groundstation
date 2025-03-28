@@ -1,12 +1,7 @@
-// putting this one on ice for now
-
 namespace mpcc {
 namespace controller {
 
-class DirColController {
-    public:
+// gonna figure this out soon
 
-};
-
-} // namespace controller
-} // namespace mpcc
+}  // namespace controller
+}  // namespace mpcc

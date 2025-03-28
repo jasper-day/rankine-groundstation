@@ -126,7 +126,7 @@ class DubinsPath {
                                case SegmentType::LINESEGMENT:
                                  return sum + 4;
                                case SegmentType::CIRCULARSEGMENT:
-                                 return sum + 6;
+                                 return sum + 5;
                                default:
                                  return sum;
                              }

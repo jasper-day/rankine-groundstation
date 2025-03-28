@@ -62,12 +62,12 @@ PYBIND11_MODULE(pydubins, m) {
   py::class_<CircularSegment<T>, Segment<T>,
              std::shared_ptr<CircularSegment<T>>>(m, "CircularSegment")
       .def(py::init([](const Eigen::Ref<const Eigen::Vector2d>& center,
-                       T radius, T dir, T heading, T arclength) {
+                       T radius, T heading, T arclength) {
              return std::make_shared<CircularSegment<T>>(
-                 drake::Vector2<T>(center), radius, dir, heading, arclength);
+                 drake::Vector2<T>(center), radius, heading, arclength);
            }),
-           py::arg("center"), py::arg("radius"), py::arg("dir"),
-           py::arg("heading"), py::arg("arclength"))
+           py::arg("center"), py::arg("radius"), py::arg("heading"),
+           py::arg("arclength"))
       .def("path_coords", &CircularSegment<T>::path_coords)
       .def("length", &CircularSegment<T>::length)
       .def("start", &CircularSegment<T>::start)

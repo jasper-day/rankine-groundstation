@@ -63,17 +63,19 @@ drake::Vector2<T> CircularSegment<T>::start() const {
 
 template <typename T>
 drake::Vector2<T> CircularSegment<T>::end() const {
-  return eval(arclength_);
+  using std::abs;
+  return eval(abs(arclength_));
 }
 
 template <typename T>
 drake::Vector2<T> CircularSegment<T>::eval(T arclength) const {
+  using std::abs;
   using std::clamp;
-  arclength = clamp(arclength, T(0), arclength_);
-  T angle = heading_ + dir_ * arclength / radius_;
   using std::cos;
   using std::sin;
-  return center_ + radius_ * drake::Vector2<T>(cos(angle), sin(angle));
+  arclength = clamp(arclength, T(0), abs(arclength_));
+  T angle = heading_ + arclength / radius_ * dir();
+  return centre_ + radius_ * drake::Vector2<T>(cos(angle), sin(angle));
 }
 
 template <typename T>
@@ -83,14 +85,14 @@ drake::Vector2<T> CircularSegment<T>::path_coords(
   // circle multiple times. We have effectively added a branch cut and are not
   // tracking winding number. In a system, the distance can only increase, and
   // path integration should take care of it.
-  drake::Vector2<T> to_point = point - center_;
+  drake::Vector2<T> to_point = point - centre_;
   T dist = to_point.norm();
   using std::atan2;
-  T angle = atan2(to_point.y(), to_point.x()) - heading_start();
-  T arclength = angle * radius_ * dir_;
+  T angle = atan2(to_point.y(), to_point.x()) - heading_;
+  T arclength = angle * radius_;
   using std::clamp;
   arclength = clamp(arclength, T(0), arclength_);
-  T normal_dist = (dist - radius_) * dir_;
+  T normal_dist = (dist - radius_) * dir();
   return drake::Vector2<T>(arclength, normal_dist);
 }
 

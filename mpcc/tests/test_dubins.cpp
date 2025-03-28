@@ -20,13 +20,13 @@ class DubinsPathTest : public ::testing::Test {
                                                 drake::Vector2<T>(10.0, 20.0));
 
     auto cs1 = std::make_shared<CircularSegment<T>>(
-        drake::Vector2<T>(15.0, 20.0), 5.0, 1.0, M_PI, 5.0 * M_PI / 2.0);
+        drake::Vector2<T>(15.0, 20.0), 5.0, M_PI, 5.0 * M_PI / 2.0);
 
     auto ls2 = std::make_shared<LineSegment<T>>(drake::Vector2<T>(15.0, 25.0),
                                                 drake::Vector2<T>(35.0, 25.0));
 
     auto cs2 = std::make_shared<CircularSegment<T>>(
-        drake::Vector2<T>(35.0, 35.0), 10.0, -1.0, 0.0, 10.0 * M_PI);
+        drake::Vector2<T>(35.0, 35.0), 10.0, 0.0, -10.0 * M_PI);
 
     // Add by copy, of course!
     path_.add_segment(ls1);
