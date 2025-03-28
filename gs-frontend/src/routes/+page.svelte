@@ -7,6 +7,9 @@
     // delete
     // look into pointer events in chrome (no drag?)
     // canvas resizing
+    // split path
+    // enforce order somehow
+    // draw + change region around path
     import "cesium/Build/Cesium/Widgets/widgets.css";
 
     import { Cartesian3, Ion, Math as CesiumMath, Terrain, Viewer, Cartesian2 } from "cesium";
