@@ -104,7 +104,15 @@ PYBIND11_MODULE(pydubins, m) {
       .def("start", &DubinsPath<T>::start)
       .def("end", &DubinsPath<T>::end)
       .def("get_params", &DubinsPath<T>::get_params)
-      .def("set_params", &DubinsPath<T>::set_params)
+      // We need to use an Eigen::Ref for pybind11 to work with numpy arrays,
+      // otherwise SIGSEV
+      .def(
+          "set_params",
+          [](DubinsPath<T>& self,
+             const Eigen::Ref<const Eigen::VectorXd>& params) {
+            self.set_params(drake::VectorX<T>(params));
+          },
+          py::arg("params"))
       .def("get_constraint_residuals",
            [](DubinsPath<T>& self,
               const Eigen::Ref<const Eigen::VectorXd>& values) {
@@ -117,7 +125,8 @@ PYBIND11_MODULE(pydubins, m) {
 
   py::class_<DubinsSolver>(m, "DubinsSolver")
       .def(py::init<>())
-      .def(py::init<double, int>(), py::arg("tolerance"), py::arg("max_iter"))
+      .def(py::init<double, int, int>(), py::arg("tolerance"),
+           py::arg("max_iter"), py::arg("debug"))
       .def("solve", &DubinsSolver::solve);
 }
 

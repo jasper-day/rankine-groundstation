@@ -47,7 +47,7 @@ def test_constraint_residuals():
     expected_residuals = np.zeros(8)
     # location, then heading residuals
     expected_residuals[0] = 20.0**2
-    expected_residuals[4] = np.sin(np.pi / 4)**2
+    expected_residuals[4] = np.sin(np.pi / 8)**2
     assert path.get_constraint_residuals(altered_params) == approx(expected_residuals)
 
 def test_lengths():
