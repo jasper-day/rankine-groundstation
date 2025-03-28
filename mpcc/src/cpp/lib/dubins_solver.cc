@@ -1,5 +1,7 @@
 #include "dubins_solver.h"
 
+#include <iostream>
+
 #include <Eigen/Dense>
 #include <Eigen/SparseCore>
 #include <Eigen/SparseQR>
@@ -52,6 +54,12 @@ drake::VectorX<double> mpcc::dubins::DubinsSolver::solve(
    * @param dragged_points -- an N_SEGMENTS + 1 sized list of bools indicating
    * whether that control point is currently being dragged.
    *
+   * @todo add dragged_points
+   *
+   * @todo don't change circular arc direction parameter
+   *
+   * @todo debug convergence errors
+   *
    */
 
   using Eigen::Index;
@@ -78,7 +86,8 @@ drake::VectorX<double> mpcc::dubins::DubinsSolver::solve(
       return path.get_constraint_residuals(x);
     } else {
       // cast to AutoDiffXd
-      drake::VectorX<drake::AutoDiffXd> x_ad = x.template cast<drake::AutoDiffXd>();
+      drake::VectorX<drake::AutoDiffXd> x_ad =
+          x.template cast<drake::AutoDiffXd>();
       return differentiable_path.get_constraint_residuals(x_ad);
     }
   };
@@ -129,8 +138,17 @@ drake::VectorX<double> mpcc::dubins::DubinsSolver::solve(
     // Check for convergence
     // All constraint values should be zero
     converged = true;
-    if (B.dot(B) >= tolerance_) {
+    if (B.cwiseAbs().sum() >= tolerance_) {
       converged = false;
+    }
+
+    // debug information
+    if ((debug_ >= 2) || (debug_ >= 1 && iter % 5 == 0)) {
+      using std::cout;
+      cout << "Iteration number " << iter << "\n";
+      cout << "Current residuals\n" << B << "\n";
+      cout << "Parameter values\n" << p_curr << "\n";
+      cout << "Change in parameters\n" << dx << std::endl;
     }
 
   } while (
@@ -138,7 +156,17 @@ drake::VectorX<double> mpcc::dubins::DubinsSolver::solve(
       iter++ < max_iter_ && !converged);
   // NEWTON ITERATION LOOP END
 
-  if (!converged) throw std::runtime_error("Could not converge configuration");
+  if (!converged) {
+    std::stringstream ss;
+    ss << "Could not converge configuration after " << iter << " iterations.\n";
+    ss << "Final constraint residuals:\n";
+    ss << B << "\n";
+    ss << "Final parameter values:\n";
+    ss << p_curr << "\n";
+    ss << "Parameter changes in last iteration:\n";
+    ss << dx << "\n";
+    throw std::runtime_error(ss.str());
+  }
 
   return p_curr;
 }
