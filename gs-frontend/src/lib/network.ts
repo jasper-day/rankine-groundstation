@@ -17,7 +17,7 @@ export class Network {
     socket: WebSocket | undefined = undefined;
     private waiting_for: Array<{ id: number; callback: any }> = [];
     private curr_id: number = 0;
-    constructor() {}
+    constructor() { }
     public connect(): Promise<void | ConnectionError> {
         return new Promise((resolve, _) => {
             try {
@@ -29,7 +29,7 @@ export class Network {
             this.socket.addEventListener("error", (e) => {
                 resolve(new ConnectionError(e));
             });
-            this.socket.addEventListener("open", (_) => {});
+            this.socket.addEventListener("open", (_) => { });
             this.socket.addEventListener("message", (event) => {
                 let obj = JSON.parse(event.data);
 
@@ -46,7 +46,7 @@ export class Network {
         });
     }
 
-    public request(data: any): Promise<Map<string, any> | ConnectionError | ServerError> {
+    public request(data: any): Promise<any | ConnectionError | ServerError> {
         return new Promise((resolve, _) => {
             if (this.socket === undefined) {
                 resolve(new ConnectionError("Not connected"));
@@ -58,7 +58,7 @@ export class Network {
                     if (received["op"] == "error") {
                         resolve(new ServerError(data, received.data.message));
                     } else {
-                        resolve(received);
+                        resolve(received.data);
                     }
                 }
             });
