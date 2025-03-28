@@ -38,10 +38,10 @@
                     `The server responded with error message '${response.message}' for packet '${JSON.stringify(response.request)}'`
                 );
             } else {
-                this.shapes = response.get("shapes").map((ds: Map<string, any>) => {
-                    if (ds.get("type") == "arc") {
+                this.shapes = response.path.map((ds: any) => {
+                    if (ds.type == "arc") {
                         return Arc.deserialise(ds);
-                    } else if (ds.get("type") == "line") {
+                    } else if (ds.type == "line") {
                         return Line.deserialise(ds);
                     }
                 });

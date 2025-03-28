@@ -121,7 +121,7 @@ export class Line {
     }
 
     static deserialise(d: any): Line {
-        return new Line(new Local3(d.start.y, d.start.x, 0.0), new Local3(d.end.y, d.end.x, 0.0));
+        return new Line(new Local3(d.start[1], d.start[0], 0.0), new Local3(d.end[1], d.end[0], 0.0));
     }
 }
 
@@ -152,11 +152,11 @@ export class Arc {
 
     static deserialise(d: any): Arc {
         return new Arc(
-            new Local3(d.centre.y, d.centre.x, 0),
+            new Local3(d.centre[1], d.centre[0], 0),
             d.radius,
             d.heading,
             d.arclength / d.radius,
-            d.direction
+            d.direction > 0 ? 1 : -1
         );
     }
 
