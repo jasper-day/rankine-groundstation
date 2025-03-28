@@ -10,6 +10,7 @@ const TRI_SIZE = 10;
 // may be premature optimisation but cesium does it so i will too
 let scratchc3_a: Cartesian3 = new Cartesian3();
 let scratchc3_b: Cartesian3 = new Cartesian3();
+let scratchc2: Cartesian2 = new Cartesian2();
 
 export class Local3 {
     _x: number;
@@ -170,12 +171,9 @@ export class Arc {
         return new Arc(centre, r, theta0, arc_length, direction);
     }
 
-    static NEtoXY(angle: number) {
-        return angle - Math.PI / 2;
-    }
-
-    draw(ctx: CanvasRenderingContext2D, viewer: Viewer, inhibit_endpoints?: boolean) {
+    get_screenspace_params(viewer: Viewer): { centre: Cartesian2; rad: number; theta0: number; theta1: number } {
         const centre = viewer.scene.cartesianToCanvasCoordinates(this.centre.toCartesian(), scratchc3_a);
+        // hack to get the radius in screen space
         const rad_point_local = new Local3(this.centre.x + this.radius, this.centre.y, this.centre.z);
         const rad_point_screen = viewer.scene.cartesianToCanvasCoordinates(rad_point_local.toCartesian());
         const rad = Cartesian2.distance(centre, rad_point_screen);
@@ -183,17 +181,34 @@ export class Arc {
         Cartesian2.subtract(rad_point_screen, centre, x_axis);
         // heading from North to East
         const dtheta = Math.atan2(x_axis.y, x_axis.x);
-        // note - much ang_mod use
+
+        const arc_length = this.direction == 1 ? this.dangle : -this.dangle;
         const theta0 = ang_mod(this.theta0 + dtheta);
-        const signed_dangle = this.direction * this.dangle;
-        const theta1 = ang_mod(theta0 + signed_dangle);
-        const half_theta = ang_mod(theta0 + signed_dangle / 2);
+        const theta1 = ang_mod(theta0 + arc_length);
+        return { centre: centre, rad: rad, theta0: theta0, theta1: theta1 };
+    }
+
+    get_endpoint(centre: Cartesian2, rad: number, theta: number): Cartesian2 {
+        const x = centre.x + rad * Math.cos(theta);
+        const y = centre.y + rad * Math.sin(theta);
+        scratchc2.x = x;
+        scratchc2.y = y;
+        return scratchc2;
+    }
+    static NEtoXY(angle: number) {
+        return angle - Math.PI / 2;
+    }
+
+    draw(ctx: CanvasRenderingContext2D, viewer: Viewer, inhibit_endpoints?: boolean) {
+        const { centre, rad, theta0, theta1 } = this.get_screenspace_params(viewer);
+        const arc_length = this.direction == 1 ? this.dangle : -this.dangle;
+        const theta1 = ang_mod(theta0 + arc_length);
+        const half_theta = ang_mod(theta0 + arc_length / 2);
 
         // Convert headings to XY (E-N angle)
         const theta0_XY = Arc.NEtoXY(theta0),
             theta1_XY = Arc.NEtoXY(theta1),
             half_theta_XY = Arc.NEtoXY(half_theta);
-        // hack to get the radius in screen space
         ctx.beginPath();
         ctx.arc(centre.x, centre.y, rad, theta0_XY, theta1_XY, this.direction == -1);
         ctx.stroke();
@@ -202,22 +217,12 @@ export class Arc {
         ctx.fill();
         if (!inhibit_endpoints) {
             ctx.beginPath();
-            ctx.arc(
-                centre.x + rad * Math.cos(theta0_XY),
-                centre.y + rad * Math.sin(theta0_XY),
-                HANDLE_POINT_RADIUS,
-                0,
-                2 * Math.PI
-            );
+            const p1 = this.get_endpoint(centre, rad, theta0_XY);
+            ctx.arc(p1.x, p1.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
             ctx.fill();
             ctx.beginPath();
-            ctx.arc(
-                centre.x + rad * Math.cos(theta1_XY),
-                centre.y + rad * Math.sin(theta1_XY),
-                HANDLE_POINT_RADIUS,
-                0,
-                2 * Math.PI
-            );
+            const p2 = this.get_endpoint(centre, rad, theta1_XY);
+            ctx.arc(p2.x, p2.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
             ctx.fill();
         }
 
