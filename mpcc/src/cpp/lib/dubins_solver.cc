@@ -68,6 +68,11 @@ drake::VectorX<double> mpcc::dubins::DubinsSolver::solve(
   int n = path.n_params();
   int m = path.n_constraints();
 
+  if (debug_ >= 1) {
+    std::cout << "Solving optimization problem with " << n << " parameters and "
+              << m << " constraints." << std::endl;
+  }
+
   SparseMatrix<double> A;
   drake::VectorX<double> B(m);
   drake::VectorX<double> z(m);
@@ -102,7 +107,7 @@ drake::VectorX<double> mpcc::dubins::DubinsSolver::solve(
     auto jac = drake::math::jacobian(constraint_residuals, p_curr);
 
     B = drake::math::ExtractValue(jac);
-    A = drake::math::ExtractGradient(jac).sparseView();
+    A = drake::math::ExtractGradient(jac, n).sparseView();
 
     // TODO
     // // Rescale A according to dragging
