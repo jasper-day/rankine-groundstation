@@ -143,7 +143,7 @@ export class Arc {
         return {
             type: "arc",
             centre: [this.centre.y, this.centre.x], // swap x and y for NED
-            heading: ang_mod(Math.PI / 2 - this.theta0),
+            heading: ang_mod(-Math.PI / 2 - this.theta0),
             arclength: this.dangle * this.radius,
             direction: this.direction,
             radius: this.radius
