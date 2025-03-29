@@ -9,6 +9,7 @@
     // split path
     // enforce order somehow
     // draw + change region around path
+    // reconnect to backend + show error
     import "cesium/Build/Cesium/Widgets/widgets.css";
 
     import { Cartesian3, Ion, Math as CesiumMath, Terrain, Viewer, Cartesian2 } from "cesium";
@@ -115,7 +116,7 @@
                             let centre = intermediate_points[0];
                             let outer_point = mouse_local;
                             let r = Local3.distance(centre, outer_point);
-                            new Arc(centre, r, 0, Math.PI * 2 - 0.0001, 1).draw(ctx, viewer, true);
+                            new Arc(centre, r, 0, Math.PI * 2 - 0.0001).draw(ctx, viewer, true);
                         } else if (intermediate_points.length == 2) {
                             let dir: 1 | -1;
                             if (arc_direction_guess === undefined) {
@@ -131,7 +132,7 @@
                                 intermediate_points[0],
                                 intermediate_points[1],
                                 mouse_local,
-                                dir
+                                dir,
                             ).draw(ctx, viewer);
                         }
                     }
@@ -182,7 +183,6 @@
                             intermediate_points[0],
                             intermediate_points[1],
                             Local3.fromCartesian(cartesian),
-                            arc_direction_guess
                         )
                     );
                     arc_direction_guess = undefined;

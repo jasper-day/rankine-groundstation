@@ -130,14 +130,12 @@ export class Arc {
     centre: Local3;
     radius: number;
     theta0: number; // radians
-    dangle: number; // radians
-    direction: 1 | -1;
-    constructor(centre: Local3, radius: number, theta0: number, dangle: number, direction: 1 | -1) {
+    dangle: number; // radians, signed
+    constructor(centre: Local3, radius: number, theta0: number, dangle: number) {
         this.centre = centre;
         this.radius = radius;
         this.theta0 = theta0;
         this.dangle = dangle;
-        this.direction = direction;
     }
 
     serialise(): any {
@@ -146,7 +144,6 @@ export class Arc {
             centre: [this.centre.y, this.centre.x], // swap x and y for NED
             heading: ang_mod(this.theta0),
             arclength: this.dangle * this.radius,
-            direction: this.direction,
             radius: this.radius
         };
     }
@@ -157,7 +154,6 @@ export class Arc {
             d.radius,
             d.heading,
             d.arclength / d.radius,
-            d.direction > 0 ? 1 : -1
         );
     }
 
@@ -168,7 +164,7 @@ export class Arc {
         // end heading, N-E
         let theta1 = Math.atan2(b.x - centre.x, b.y - centre.y);
         let arc_length = ang_mod2(direction == -1 ? theta0 - theta1 : theta1 - theta0);
-        return new Arc(centre, r, theta0, arc_length, direction);
+        return new Arc(centre, r, theta0, direction * arc_length);
     }
 
     get_screenspace_params(viewer: Viewer): { centre: Cartesian2; rad: number; theta0: number; theta1: number } {
@@ -182,7 +178,7 @@ export class Arc {
         // heading from North to East
         const dtheta = Math.atan2(x_axis.y, x_axis.x);
 
-        const arc_length = this.direction == 1 ? this.dangle : -this.dangle;
+        const arc_length = this.dangle;
         const theta0 = ang_mod(this.theta0 + dtheta);
         const theta1 = ang_mod(theta0 + arc_length);
         return { centre: centre, rad: rad, theta0: theta0, theta1: theta1 };
@@ -201,8 +197,7 @@ export class Arc {
 
     draw(ctx: CanvasRenderingContext2D, viewer: Viewer, inhibit_endpoints?: boolean) {
         const { centre, rad, theta0, theta1 } = this.get_screenspace_params(viewer);
-        const arc_length = this.direction == 1 ? this.dangle : -this.dangle;
-        const theta1 = ang_mod(theta0 + arc_length);
+        const arc_length = this.dangle;
         const half_theta = ang_mod(theta0 + arc_length / 2);
 
         // Convert headings to XY (E-N angle)
@@ -210,7 +205,7 @@ export class Arc {
             theta1_XY = Arc.NEtoXY(theta1),
             half_theta_XY = Arc.NEtoXY(half_theta);
         ctx.beginPath();
-        ctx.arc(centre.x, centre.y, rad, theta0_XY, theta1_XY, this.direction == -1);
+        ctx.arc(centre.x, centre.y, rad, theta0_XY, theta1_XY, arc_length < 0);
         ctx.stroke();
         ctx.beginPath();
         ctx.arc(centre.x, centre.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
@@ -237,7 +232,7 @@ export class Arc {
         }
         Cartesian2.normalize(norm, norm);
         const tangent = new Cartesian2(-norm.y, norm.x);
-        Cartesian2.multiplyByScalar(tangent, -this.direction, tangent);
+        Cartesian2.multiplyByScalar(tangent, -Math.sign(arc_length), tangent);
         const arrow_point = new Cartesian2(
             half_theta_screen.x - (tangent.x * TRI_SIZE) / 2,
             half_theta_screen.y - (tangent.y * TRI_SIZE) / 2
