@@ -30,7 +30,7 @@ class LineSegment(Segment):
 class CircularSegment(Segment):
     "A curved segment"
     def __init__(self, 
-                 center: Vec2, 
+                 centre: Vec2, 
                  radius: float64, 
                  heading: float64, 
                  arclength: float64): ...
