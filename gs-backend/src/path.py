@@ -3,13 +3,12 @@ from typing import Literal, Union
 from typing_extensions import Annotated
 from mpcc.pydubins import DubinsPath, LineSegment, CircularSegment, SegmentType, DubinsSolver
 import numpy as np
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 class Arc(BaseModel):
     type: Literal["arc"] = "arc"
     centre: list[float]
     radius: float
-    direction: float
     heading: float
     arclength: float
     def to_dubins(self):
@@ -17,9 +16,8 @@ class Arc(BaseModel):
         assert len(self.centre) == 2
         assert np.isclose(self.direction, 1) or np.isclose(self.direction, -1)
         return CircularSegment(
-            center=np.array(self.centre, np.float64),
+            centre=np.array(self.centre, np.float64),
             radius=self.radius,
-            dir=self.direction,
             heading=self.heading,
             arclength=self.arclength,
         )
@@ -74,9 +72,8 @@ def to_path(dubins: DubinsPath, params: np.ndarray[np.float64]) -> Path:
                     Arc(
                         centre=[params[index], params[index+1]],
                         radius=params[index+2],
-                        direction=params[index+3],
-                        heading=params[index+4],
-                        arclength=params[index+5]
+                        heading=params[index+3],
+                        arclength=params[index+4]
                     )
                 )
                 index += 6
