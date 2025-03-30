@@ -6,8 +6,8 @@
 
 template <typename T>
 drake::Vector<T, 5> mpcc::dynamics::FDM_2D<T>::dynamics(
-    drake::Vector<T, 5> state, drake::Vector<T, 1> controls,
-    drake::Vector<T, 2> wind_NED, T v_A) {
+    drake::Vector<T, 5> const& state, drake::Vector<T, 1> const& controls,
+    drake::Vector<T, 2> const& wind_NED) {
   using std::cos;
   using std::sin;
   using std::tan;
@@ -27,9 +27,9 @@ drake::Vector<T, 5> mpcc::dynamics::FDM_2D<T>::dynamics(
   // Second order roll dynamics model phi_r / r = b0 / s^2 + a_1 s + a_0
   ddphi = roll_params_(0) * phi_ref - roll_params_(1) * phi -
           roll_params_(2) * dphi;
-  dxi = g_ * tan(phi) / v_A;
-  dnorth = v_A * cos(xi) + wind_NED(0);
-  deast = v_A * sin(xi) + wind_NED(1);
+  dxi = g_ * tan(phi) / v_A_;
+  dnorth = v_A_ * cos(xi) + wind_NED(0);
+  deast = v_A_ * sin(xi) + wind_NED(1);
   dstate << dphi, ddphi, dxi, dnorth, deast;
   return dstate;
 }

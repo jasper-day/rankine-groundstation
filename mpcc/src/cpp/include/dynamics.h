@@ -39,9 +39,13 @@ class FDM_2D {
   FDM_2D(drake::Vector<T, 3> roll_params, T g)
       : g_(g), roll_params_(roll_params) {}
 
+  void set_g(T g) { g_ = g; }
+  void set_v_A(T v_A) { v_A_ = v_A; }
+  void set_params(drake::Vector<T, 3> params) { params = params }
+
   /// Scalar-converting copy constructor
   template <typename U>
-  FDM_2D(FDM_2D<U> other) : FDM_2D(other.roll_params_, other.g) {}
+  FDM_2D(FDM_2D<U> const& other) : FDM_2D(other.roll_params_, other.g) {}
 
   template <typename U>
   friend class FDM_2D<U>;
@@ -80,13 +84,15 @@ class FDM_2D {
    * de (m/s)       : velocity east
    *
    */
-  drake::Vector<T, 5> dynamics(drake::Vector<T, 5> state,
-                               drake::Vector<T, 1> controls,
-                               drake::Vector<T, 2> wind_NED, T v_A);
+  drake::Vector<T, 5> dynamics(drake::Vector<T, 5> const& state,
+                               drake::Vector<T, 1> const& controls,
+                               drake::Vector<T, 2> const& wind_NED);
 
  private:
   /// Acceleration due to gravity (m/s^2)
   T g_;
+  /// (Constant) plane velocity
+  T v_A_;
   drake::Vector<T, 3> roll_params_;
 };
 
@@ -130,7 +136,7 @@ class FDM_3D {
 
   /// Scalar-converting copy constructor
   template <typename U>
-  FDM_3D(FDM_3D<U> other)
+  FDM_3D(FDM_3D<U> const& other)
       : FDM_3D<T>(other.coeffs_cl_, other.coeffs_ol_, other.m_, other.g_) {}
 
   /**
@@ -210,6 +216,11 @@ class FDM_3D {
   T C_L0() const { return coeffs_ol_(7); }
   T C_L1() const { return coeffs_ol_(8); }
   T C_L2() const { return coeffs_ol_(9); }
+
+  void set_m(T m) { m_ = m; }
+  void set_g(T g) { g_ = g; }
+  void set_coeffs_cl(drake::Vector<T, 10> coeffs_cl) { coeffs_cl_ = coeffs_cl; }
+  void set_coeffs_ol(drake::Vector<T, 10> coeffs_ol) { coeffs_ol_ = coeffs_ol; }
 
   template <typename U>
   friend class FDM_3D;

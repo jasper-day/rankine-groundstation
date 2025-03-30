@@ -39,6 +39,7 @@ set(DUBINS_SOURCES
 
 set(CONTROLLER_SOURCES
     src/cpp/lib/dynamics.cc
+    src/cpp/lib/drake_dynamic_systems.cc
 )
 
 # Create dubins library
