@@ -12,9 +12,9 @@ class DubinsSolver {
  public:
   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(DubinsSolver);
 
-  DubinsSolver() : DubinsSolver(1e-6, 50) {};
-  DubinsSolver(double tolerance, int max_iter)
-      : tolerance_(tolerance), max_iter_(max_iter) {};
+  DubinsSolver() : DubinsSolver(1e-6, 50, 0) {};
+  DubinsSolver(double tolerance, int max_iter, int debug)
+      : tolerance_(tolerance), max_iter_(max_iter), debug_(debug) {};
   ~DubinsSolver() = default;
 
   /**
@@ -37,6 +37,7 @@ class DubinsSolver {
  protected:
   double tolerance_;
   int max_iter_;
+  int debug_;
 };
 
 }  // namespace dubins

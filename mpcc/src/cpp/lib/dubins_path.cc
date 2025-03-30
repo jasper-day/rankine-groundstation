@@ -123,7 +123,7 @@ drake::VectorX<T> DubinsPath<T>::get_constraint_residuals(
   int n_points = segments_.size() - 1;
   drake::VectorX<T> distance_residuals(n_points);
   drake::Vector2<T> distance;
-  // sin squared of headings to allow off-by-2π
+  // sin squared of headings/2 to allow off-by-2π
   drake::VectorX<T> heading_residuals(n_points);
   T heading_diff;
   using std::pow;
@@ -131,10 +131,10 @@ drake::VectorX<T> DubinsPath<T>::get_constraint_residuals(
   for (int i = 0; i != n_points; ++i) {
     // add distance residual
     distance = segments_[i]->end() - segments_[i + 1]->start();
-    distance_residuals[i] = distance.dot(distance);
+    distance_residuals(i) = distance.dot(distance);
     heading_diff =
         segments_[i]->heading_end() - segments_[i + 1]->heading_start();
-    heading_residuals[i] = pow(sin(heading_diff), T(2));
+    heading_residuals(i) = pow(sin(heading_diff / 2), T(2));
   }
   drake::VectorX<T> output(n_points * 2);
   output << distance_residuals, heading_residuals;
@@ -149,4 +149,3 @@ template DubinsPath<drake::AutoDiffXd>::DubinsPath(const DubinsPath<double>&);
 
 DRAKE_DEFINE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
     class ::mpcc::dubins::DubinsPath);
-
