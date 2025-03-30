@@ -5,7 +5,37 @@
 #include <drake/common/eigen_types.h>
 
 template <typename T>
-drake::Vector<T, 9> mpcc::dynamics::FDM<T>::dynamics(
+drake::Vector<T, 5> mpcc::dynamics::FDM_2D<T>::dynamics(
+    drake::Vector<T, 5> state, drake::Vector<T, 1> controls,
+    drake::Vector<T, 2> wind_NED, T v_A) {
+  using std::cos;
+  using std::sin;
+  using std::tan;
+  drake::Vector<T, 5> dstate;
+
+  // STATE VARIABLES
+  T phi = state(0);
+  T dphi = state(1);
+  T xi = state(2);
+  T north = state(3);
+  T east = state(4);
+
+  // CONTROL VARIABLES
+  T phi_ref = controls(0);
+
+  // DERIVATIVES
+  // Second order roll dynamics model phi_r / r = b0 / s^2 + a_1 s + a_0
+  ddphi = roll_params_(0) * phi_ref - roll_params_(1) * phi -
+          roll_params_(2) * dphi;
+  dxi = g_ * tan(phi) / v_A;
+  dnorth = v_A * cos(xi) + wind_NED(0);
+  deast = v_A * sin(xi) + wind_NED(1);
+  dstate << dphi, ddphi, dxi, dnorth, deast;
+  return dstate;
+}
+
+template <typename T>
+drake::Vector<T, 9> mpcc::dynamics::FDM_3D<T>::dynamics(
     drake::Vector<T, 9> const& state,
     drake::Vector<T, 4> const& controls) const {
   using std::atan2;
@@ -75,7 +105,7 @@ drake::Vector<T, 9> mpcc::dynamics::FDM<T>::dynamics(
 }
 
 template <typename T>
-drake::Vector<T, 3> mpcc::dynamics::FDM<T>::kinematics(
+drake::Vector<T, 3> mpcc::dynamics::FDM_3D<T>::kinematics(
     drake::Vector<T, 9> const& state, drake::Vector<T, 3> const& wind_NED) {
   using std::cos;
   using std::sin;
