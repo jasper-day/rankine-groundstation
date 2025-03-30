@@ -132,7 +132,7 @@
                                 intermediate_points[0],
                                 intermediate_points[1],
                                 mouse_local,
-                                dir,
+                                dir
                             ).draw(ctx, viewer);
                         }
                     }
@@ -183,6 +183,7 @@
                             intermediate_points[0],
                             intermediate_points[1],
                             Local3.fromCartesian(cartesian),
+                            arc_direction_guess
                         )
                     );
                     arc_direction_guess = undefined;

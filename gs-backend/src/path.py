@@ -14,7 +14,6 @@ class Arc(BaseModel):
     def to_dubins(self):
         print("Creating Dubins Circular segment")
         assert len(self.centre) == 2
-        assert np.isclose(self.direction, 1) or np.isclose(self.direction, -1)
         return CircularSegment(
             centre=np.array(self.centre, np.float64),
             radius=self.radius,
@@ -76,7 +75,7 @@ def to_path(dubins: DubinsPath, params: np.ndarray[np.float64]) -> Path:
                         arclength=params[index+4]
                     )
                 )
-                index += 6
+                index += 5
     return path
 
 def solve(path: Path) -> Path:
