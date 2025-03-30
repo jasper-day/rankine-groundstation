@@ -37,24 +37,36 @@ set(DUBINS_SOURCES
     src/cpp/lib/dubins_solver.cc
 )
 
+set(CONTROLLER_SOURCES
+    src/cpp/lib/dynamics.cc
+)
+
 # Create dubins library
 add_library(dubins SHARED ${DUBINS_SOURCES})
+add_library(controller SHARED ${CONTROLLER_SOURCES})
 
 target_include_directories(dubins
     PUBLIC src/cpp/include
     PUBLIC ${drake_INCLUDE_DIRS}
 )
 
+target_include_directories(controller
+    PUBLIC src/cpp/include
+    PUBLIC ${drake_INCLUDE_DIRS}
+)
+
 target_link_libraries(dubins PRIVATE drake::drake)
 target_link_directories(dubins PRIVATE ${drake_LIBRARY_DIRS})
+target_link_libraries(controller PRIVATE drake::drake)
+target_link_directories(controller PRIVATE ${drake_LIBRARY_DIRS})
 
 # Add bindings
 find_package(pybind11 CONFIG REQUIRED)
 
-set(PYDUBINS_SOURCES ${DUBINS_SOURCES} src/cpp/bindings/dubins_py.cc)
+set(PYDUBINS_SOURCES ${DUBINS_SOURCES}  ${CONTROLLER_SOURCES} src/cpp/bindings/dubins_py.cc)
 
 pybind11_add_module(pydubins MODULE ${PYDUBINS_SOURCES})
-target_link_libraries(pydubins PRIVATE drake::drake dubins)
+target_link_libraries(pydubins PRIVATE drake::drake dubins controller)
 target_link_directories(pydubins PRIVATE ${drake_LIBRARY_DIRS})
 target_include_directories(pydubins PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
