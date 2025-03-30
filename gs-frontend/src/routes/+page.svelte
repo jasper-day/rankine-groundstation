@@ -7,9 +7,10 @@
     // look into pointer events in chrome (no drag?)
     // canvas resizing
     // split path
-    // enforce order somehow
     // draw + change region around path
     // reconnect to backend + show error
+    // finish making new arc definition code
+    // think about control scheme with single line tool
     import "cesium/Build/Cesium/Widgets/widgets.css";
 
     import { Cartesian3, Ion, Math as CesiumMath, Terrain, Viewer, Cartesian2 } from "cesium";
@@ -113,22 +114,19 @@
                     }
                     if (tool == "Arc" && intermediate_points.length > 0) {
                         if (intermediate_points.length == 1) {
-// a2b = b.sub(a)
-// centre_a2b = a.add(a2b.mul(0.5))
-// m_t = ...
-// j = a + (c-a)/2
-// k = b + (d-b)/2
-// m_ab = (d-b)/(c-a)
-// m_jk = -1/m_ab = (a-c)/(d-b)
-// y = mx-ma+b
-// y = ((a-c)/(d-b))(x - j) + k
-
-// y2 = (-1/m_t)(x-a) + b
-
-// ((a-c)/(d-b))(x-j) + k = (-1/m_t)(x-a)+b
-
-// x = (a*a*(-m_t)+2*a*(b-d)+m_t*(b*b-2*b*d+c*c+d*d)/(2*(m_t*(c-a)+b-d))
-// y = (-1/m_t)(x-a) + b
+                            // a2b = b.sub(a)
+                            // centre_a2b = a.add(a2b.mul(0.5))
+                            // m_t = ...
+                            // j = a + (c-a)/2
+                            // k = b + (d-b)/2
+                            // m_ab = (d-b)/(c-a)
+                            // m_jk = -1/m_ab = (a-c)/(d-b)
+                            // y = mx-ma+b
+                            // y = ((a-c)/(d-b))(x - j) + k
+                            // y2 = (-1/m_t)(x-a) + b
+                            // ((a-c)/(d-b))(x-j) + k = (-1/m_t)(x-a)+b
+                            // x = (a*a*(-m_t)+2*a*(b-d)+m_t*(b*b-2*b*d+c*c+d*d)/(2*(m_t*(c-a)+b-d))
+                            // y = (-1/m_t)(x-a) + b
                             let p1 = intermediate_points[0];
                             let p2 = mouse_local;
                             if (Local3.distance(p1, p2) < 1) return;
@@ -150,9 +148,26 @@
                             const x = (a*a*(-m_t)+2*a*(b-d)+m_t*(b*b-2*b*d+c*c+d*d))/(2*(m_t*(c-a)+b-d));
                             const y = (-1/m_t)*(x-a) + b;
                             let centre = new Local3(x, y, p1.z);
-                            let rad = Local3.distance(centre, p1);
-                            new Arc(centre, rad, 0, Math.PI * 2 - 0.0001).draw(ctx, viewer, true);
-                            new Line(centre, p2).draw(ctx, viewer);
+                            let foo = p2.sub((line as Line).end);
+
+                            // b = location of mouse pointer
+                            // centre = circle centre
+                            // a = starting point of arc
+                            // project location of mouse pointer onto line CA
+                            const lineCA = tangent,
+                            // b length in CA direction
+                            	  lineCB = foo,
+                            // distance along CA
+                            	  distCAtoB = lineCA.mul(lineCA.dot(lineCB) / lineCA.dot(lineCA)),
+                            // normal distance from CA to B
+                            	  distBtoCA = lineCB.sub(distCAtoB),
+                            // right hand rotation of CA
+                            	  lineCA_rot90_RH = new Local3(- lineCA.y, lineCA.x, lineCA.z),
+                            // which side are we on?
+                            	  side = lineCA_rot90_RH.dot(distBtoCA),
+                            // 1 for CCW, -1 for CW
+                            	  dir = -Math.sign(side);
+                            Arc.from_centre_and_points(centre, p1, p2, dir == 1 ? 1 : -1).draw(ctx, viewer, true);
                             // let centre = intermediate_points[0];
                             // let outer_point = mouse_local;
                             // let r = Local3.distance(centre, outer_point);
