@@ -113,10 +113,50 @@
                     }
                     if (tool == "Arc" && intermediate_points.length > 0) {
                         if (intermediate_points.length == 1) {
-                            let centre = intermediate_points[0];
-                            let outer_point = mouse_local;
-                            let r = Local3.distance(centre, outer_point);
-                            new Arc(centre, r, 0, Math.PI * 2 - 0.0001).draw(ctx, viewer, true);
+// a2b = b.sub(a)
+// centre_a2b = a.add(a2b.mul(0.5))
+// m_t = ...
+// j = a + (c-a)/2
+// k = b + (d-b)/2
+// m_ab = (d-b)/(c-a)
+// m_jk = -1/m_ab = (a-c)/(d-b)
+// y = mx-ma+b
+// y = ((a-c)/(d-b))(x - j) + k
+
+// y2 = (-1/m_t)(x-a) + b
+
+// ((a-c)/(d-b))(x-j) + k = (-1/m_t)(x-a)+b
+
+// x = (a*a*(-m_t)+2*a*(b-d)+m_t*(b*b-2*b*d+c*c+d*d)/(2*(m_t*(c-a)+b-d))
+// y = (-1/m_t)(x-a) + b
+                            let p1 = intermediate_points[0];
+                            let p2 = mouse_local;
+                            if (Local3.distance(p1, p2) < 1) return;
+                            // calculate centre and radius given tangent
+                            let line = shapes.shapes[shapes.shapes.length - 1];
+                            let tangent;
+                            if (line instanceof Line) {
+                                tangent = line.end.sub(line.start);
+                            } else {
+                                // uhh find tangent of arc
+                                tangent = new Local3(1, 0, 0);
+                            }
+                            // let rad_dir = new Local3(-tangent.y, tangent.x, tangent.z); // 2D 90° rotation
+                            const m_t = tangent.y / tangent.x;
+                            const a = p1.x;
+                            const b = p1.y;
+                            const c = p2.x;
+                            const d = p2.y;
+                            const x = (a*a*(-m_t)+2*a*(b-d)+m_t*(b*b-2*b*d+c*c+d*d))/(2*(m_t*(c-a)+b-d));
+                            const y = (-1/m_t)*(x-a) + b;
+                            let centre = new Local3(x, y, p1.z);
+                            let rad = Local3.distance(centre, p1);
+                            new Arc(centre, rad, 0, Math.PI * 2 - 0.0001).draw(ctx, viewer, true);
+                            new Line(centre, p2).draw(ctx, viewer);
+                            // let centre = intermediate_points[0];
+                            // let outer_point = mouse_local;
+                            // let r = Local3.distance(centre, outer_point);
+                            // new Arc(centre, r, 0, Math.PI * 2 - 0.0001).draw(ctx, viewer, true);
                         } else if (intermediate_points.length == 2) {
                             let dir: 1 | -1;
                             if (arc_direction_guess === undefined) {
@@ -164,7 +204,8 @@
                     intermediate_points.push(Local3.fromCartesian(cartesian));
                 } else {
                     shapes.add_shape(new Line(intermediate_points[0], Local3.fromCartesian(cartesian)));
-                    intermediate_points = [];
+                    intermediate_points = [Local3.fromCartesian(cartesian)];
+                    tool = "Arc";
                 }
             } else if (tool == "Arc") {
                 if (intermediate_points.length < 2) {
@@ -183,6 +224,7 @@
                             intermediate_points[0],
                             intermediate_points[1],
                             Local3.fromCartesian(cartesian),
+                            arc_direction_guess,
                         )
                     );
                     arc_direction_guess = undefined;
