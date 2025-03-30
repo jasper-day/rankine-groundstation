@@ -21,100 +21,58 @@ Drake to download.
 
 ## Build Everything
 
-Then run the following to build using CMake from the current directory
-(`drake-external-examples/drake_cmake_installed`):
+This project is set up to be built as an integrated Python package using scikit-build-core.
+Because scikit-build-core is basically just a thin wrapper around cmake, it is still mostly
+possible to build using the traditional method of 
+```bash
+mkdir build && cd build && cmake .. && cmake --build .
+```
+However, it is preferred to build using scikit build and uv.
+
+The first method to use creates a build directory and builds inside that
+directory. This helps for IDE integration by outputting `compile_commands.json`,
+which tells your IDE where to look for `#includes`. It also seems to work better
+for caching.
 
 ```bash
-mkdir build && cd build
-cmake -DCMAKE_PREFIX_PATH=$HOME/drake ..
-make
+uv venv # create a virtual environment
+uv pip install scikit-build-core pytest
+mkdir build
+uv pip install -ve . --no-build-isolation
+pytest # run tests
 ```
 
-You can also optionally run the tests by calling `make test`.
-
-## Alternative Versions
-
-By default, `install_prereqs` script gets the latest version
-of Drake (usually last night's build). Ignore this if that
-version is desired. Otherwise, the following are alternative
-options for which version of Drake to download.
-
-To use any of these options, instead of running `install_prereqs`,
-run the code for whichever option you prefer below. Each option
-downloads Drake to the `$HOME` directory.
-
-1. A specific version (date-stamped)
-
-Replace `jammy` (for Ubuntu 22.04) with `noble` or `mac-arm64`
-to download the version needed for your operating system.
+To use `mpcc` with other libraries (like the groundstation backend), you can optionally
+compile a wheel using
 
 ```bash
-curl -O https://drake-packages.csail.mit.edu/drake/nightly/drake-0.0.20250131-jammy.tar.gz
-tar -xvzf drake-0.0.20250131-jammy.tar.gz -C $HOME
-$HOME/drake/share/drake/setup/install_prereqs
+uv build
 ```
 
-See [Installation via Direct Download](https://drake.mit.edu/from_binary.html)
-for more information.
+which will build all source code and put a wheel in the `dist` directory.
 
-2. Manual installation
+# Current State and TODO
 
-```bash
-git clone https://github.com/RobotLocomotion/drake.git
-cd drake
-setup/install_prereqs
-(mkdir build && cd build && cmake -DCMAKE_INSTALL_PREFIX=$HOME/drake .. && make)
-```
+## Dubins Code
 
-3. Manual installation w/ licensed Gurobi
-Install & setup gurobi (http://drake.mit.edu/bazel.html?highlight=gurobi#install-on-ubuntu)
+The Dubins code creates constant-curvature paths and solves for feasible configurations.
+This code powers the path editing functionality on the frontend.
 
-```bash
-git clone https://github.com/RobotLocomotion/drake.git
-cd drake
-setup/install_prereqs
-(mkdir build && cd build && cmake -DCMAKE_INSTALL_PREFIX=$HOME/drake -DWITH_GUROBI=ON .. && make)
-```
+* [Dubins Segments](src/cpp/include/dubins_segment.h)
+    * Working implementation for line and circular segments
+* [Path](src/cpp/include/dubins_path.h)
+    * Working implementation for Dubins path
+* [Solver](src/cpp/include/dubins_solver.h)
+    * Currently working in bare minimum form
+    * TODO: Add knot-point dragging code to adjust solver behaviour
+    * TODO: Explore improvements to straightforward gradient descent (eg conjugate gradients, Gauss-Newton update) 
+      to increase radius of convergence and convergence speed
+    * TODO: Better documentation of failure conditions
 
-Finally, for the code in this example, ensure you have `python3-all-dev`
-installed if on Ubuntu.
+## Controller 
 
-# Examples
-
-Drake-specific examples:
-
-* [Simple Continuous Time System](src/simple_continuous_time_system/README.md)
-* [Particle System](src/particle)
-* [Find Resources](src/find_resource/README.md)
-
-# Developer Testing
-
-If you are a Drake Developer making build or API changes that may affect the
-downstream interface, please test this locally on your system.
-
-These build instructions are adapted from those above, but will use an existing
-source tree of Drake (but *not* installing it to `$HOME/drake`),
-build this project, and then run all available tests:
-
-```bash
-# Build development version of Drake, ensuring no old artifacts are present.
-cd drake  # Where you are developing.
-rm -rf build && mkdir build && cd build
-cmake .. # Configure Gurobi, Mosek, etc, if needed.
-# Build locally.
-make
-# Record the build's install directory.
-drake_install=${PWD}/install
-
-# Build this project using a development version of Drake.
-cd ..
-# Clone this repository if you have not already.
-git clone https://github.com/RobotLocomotion/drake-external-examples.git
-cd drake-external-examples/drake_cmake_installed
-# Follow "Install Prerequisites" in the instructions linked above if you
-# have not already.
-mkdir build && cd build
-cmake -DCMAKE_PREFIX_PATH=${drake_install} ..
-make
-ctest
-```
+* [Dynamic Models](src/cpp/include/dynamics.h)
+    * Working implementation of 2D and 3D coordinated turn models
+    * TODO: Add tests
+* TODO: Drake dynamic systems wrappers
+* TODO: Drake multiple shooting trajectory optimization
