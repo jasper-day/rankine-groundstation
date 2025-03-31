@@ -167,6 +167,65 @@ export class Arc {
         return new Arc(centre, r, theta0, direction * arc_length);
     }
 
+    static from_tangent_and_points(tangent: Local3, p1: Local3, p2: Local3) {
+        // https://math.stackexchange.com/a/2464407
+        // let points A and B on the circle be (a, b) and (c, d) respectively
+        // let m_t be the gradient of the tangent at point A
+        // We know AB is a chord, therefore it is perpendicular to the radius
+        // Even moreso, its perpendicular bisector passes through the centre.
+        // Method: find the equation of AB's perpendicular bisector, and
+        // the equation of a line through A perpendicular to the tangent. These
+        // lines must intersect at the centre. Set equal and solve for x and y.
+        // 
+        // Calculate the midpoint (j, k) of the line AB
+        //     j = a + (c-a)/2
+        //     k = b + (d-b)/2
+        // Calculate the gradient m_ab of the like AB
+        //     m_ab = (d-b)/(c-a)
+        // calculate the gradient m_jk of the perpendicular bisector of AB (through jk)
+        //     m_jk = -1/m_ab = (a-c)/(d-b)
+        // The gneral equation of a line can be used
+        //     y = m(x-a)+b
+        // to find the equation of the perpendicular bisector of AB (through jk)
+        //     y_1 = m_jk(x - j) + k
+        // Now use same equation to find the equation of the line AC where C is the centre
+        // The gradient of the line must be perpendicular to the tangent gradient, since AC is a radius
+        //     y_2 = (-1/m_t)(x-a) + b
+        // Find the intersection by setting equal
+        //     m_jk(x-j) + k = (-1/m_t)(x-a)+b
+        // Substitute in for m_jk, j, and k; solve for x (wolfram alpha moment)
+        //     x = (-a²m_t + 2a(b-d) + m_t(b² - 2bd + c² + d²)/(2(m_t(c-a) + b - d))
+        // Use either of the two previous equations to find the y coordinate given x
+        //     y = (-1/m_t)(x-a) + b
+``
+        const m_t = tangent.y / tangent.x;
+        const a = p1.x;
+        const b = p1.y;
+        const c = p2.x;
+        const d = p2.y;
+        // Given points (a, b) and (c, d) with tangent gradient m_t, calculate the centre (x, y)
+        const x = (a*a*(-m_t)+2*a*(b-d)+m_t*(b*b-2*b*d+c*c+d*d))/(2*(m_t*(c-a)+b-d));
+        const y = (-1/m_t)*(x-a) + b;
+        let centre = new Local3(x, y, p1.z);
+
+        // project location of mouse pointer onto tangent line
+        const lineCA = tangent,
+        // b length in CA direction
+        	  lineCB = p2.sub(p1),
+        // distance along CA
+        	  distCAtoB = lineCA.mul(lineCA.dot(lineCB) / lineCA.dot(lineCA)),
+        // normal distance from CA to B
+        	  distBtoCA = lineCB.sub(distCAtoB),
+        // right hand rotation of CA
+        	  lineCA_rot90_RH = new Local3(- lineCA.y, lineCA.x, lineCA.z),
+        // which side are we on?
+        	  side = lineCA_rot90_RH.dot(distBtoCA),
+        // idk why the direction is opposite
+        	  dir = -Math.sign(side);
+
+        return Arc.from_centre_and_points(centre, p1, p2, dir == 1 ? 1 : -1);
+    }
+
     get_screenspace_params(viewer: Viewer): { centre: Cartesian2; rad: number; theta0: number; theta1: number } {
         const centre = viewer.scene.cartesianToCanvasCoordinates(this.centre.toCartesian(), scratchc3_a);
         // hack to get the radius in screen space
