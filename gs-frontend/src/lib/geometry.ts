@@ -250,6 +250,12 @@ export class Arc {
         scratchc2.y = y;
         return scratchc2;
     }
+
+    tangent_at_endpoint(): Local3 {
+        const theta = this.theta0;
+        return new Local3(-Math.sin(theta), Math.cos(theta), 0);
+    }
+    
     static NEtoXY(angle: number) {
         return angle - Math.PI / 2;
     }

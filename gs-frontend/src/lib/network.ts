@@ -21,7 +21,7 @@ export class Network {
     public connect(): Promise<void | ConnectionError> {
         return new Promise((resolve, _) => {
             try {
-                this.socket = new WebSocket("ws://localhost:8237");
+                this.socket = new WebSocket("ws://172.17.0.2:8237");
             } catch (e) {
                 resolve(new ConnectionError(e));
                 return;

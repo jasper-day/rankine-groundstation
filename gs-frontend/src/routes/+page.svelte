@@ -107,22 +107,33 @@
                     if (!mouse_cartesian) return;
                     const mouse_local = Local3.fromCartesian(mouse_cartesian);
 
+                    const c = viewer.scene.cartesianToCanvasCoordinates(intermediate_points[0].toCartesian(), scratchc3_a);
+                    if (Cartesian2.distance(c, new Cartesian2(mouseX, mouseY)) < 5) {
+                        if (has_moved_away) {
+                            tool = tool == "Line" ? "Arc" : "Line";
+                            has_moved_away = false;
+                            return;
+                        }
+                    } else {
+                        has_moved_away = true;
+                    }
+
                     if (tool == "Line") {
                         new Line(intermediate_points[0], mouse_local).draw(ctx, viewer);
                     }
                     if (tool == "Arc" && intermediate_points.length > 0) {
-                        let p1 = intermediate_points[0];
-                        let p2 = mouse_local;
+                        const p1 = intermediate_points[0];
+                        const p2 = mouse_local;
                         // Points are too close, can't make an arc
                         if (Local3.distance(p1, p2) < 0.01) return;
 
-                        let line = shapes.shapes[shapes.shapes.length - 1];
+                        const line = shapes.shapes[shapes.shapes.length - 1];
                         let tangent;
                         if (line instanceof Line) {
                             tangent = line.end.sub(line.start);
                         } else {
                             // uhh find tangent of arc
-                            tangent = new Local3(1, 0, 0);
+                            tangent = line.tangent_at_endpoint();
                         }
 
                         Arc.from_tangent_and_points(tangent, p1, p2).draw(ctx, viewer, false);
@@ -140,6 +151,7 @@
     });
 
     let drag_object: { shape_index: number; point_index: number } | undefined = undefined;
+    let has_moved_away = false;
     function mousedown(event: MouseEvent) {
         // console.log(event);
         if (viewer !== undefined) {
@@ -154,29 +166,33 @@
                     // add first point
                     intermediate_points.push(Local3.fromCartesian(cartesian));
                 } else {
-                    shapes.add_shape(new Line(intermediate_points[0], Local3.fromCartesian(cartesian)));
+                    const p1 = intermediate_points[0];
+                    const p2 = Local3.fromCartesian(cartesian);
+                    shapes.add_shape(new Line(p1, p2));
                     intermediate_points = [Local3.fromCartesian(cartesian)];
                     tool = "Arc";
+                    has_moved_away = false;
                 }
             } else if (tool == "Arc") {
                 // TODO maybe include old code for defining first arc?
-                let p1 = intermediate_points[0];
-                let p2 = Local3.fromCartesian(cartesian);
+                const p1 = intermediate_points[0];
+                const p2 = Local3.fromCartesian(cartesian);
                 // Points are too close, can't make an arc
                 if (Local3.distance(p1, p2) < 0.01) return;
 
-                let line = shapes.shapes[shapes.shapes.length - 1];
+                const line = shapes.shapes[shapes.shapes.length - 1];
                 let tangent;
                 if (line instanceof Line) {
                     tangent = line.end.sub(line.start);
                 } else {
                     // uhh find tangent of arc
-                    tangent = new Local3(1, 0, 0);
+                    tangent = line.tangent_at_endpoint();
                 }
 
                 shapes.add_shape(Arc.from_tangent_and_points(tangent, p1, p2));
                 intermediate_points = [p2];
                 tool = "Line";
+                has_moved_away = false;
             } else if (tool == "Empty") {
                 // check for dragging
                 const mouse = new Cartesian2(event.clientX, event.clientY);
@@ -223,6 +239,7 @@
         } else if (event.key == "Escape") {
             tool = "Empty";
             intermediate_points = [];
+            has_moved_away = false;
         } else if (event.key == "c") {
             editing_mode = "Create";
         } else if (event.key == "e") {
