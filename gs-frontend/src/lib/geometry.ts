@@ -80,9 +80,13 @@ export class Local3 {
 export class Line {
     start: Local3;
     end: Local3;
+    width_start: number;
+    width_end: number;
     constructor(start: Local3, end: Local3) {
         this.start = start;
         this.end = end;
+        this.width_start = 10;
+        this.width_end = 10;
     }
 
     draw(ctx: CanvasRenderingContext2D, viewer: Viewer) {
@@ -121,12 +125,13 @@ export class Line {
         ctx.beginPath();
         const diff = new Cartesian2();
         Cartesian2.subtract(a, b, diff);
-        const w = 10 * (Cartesian2.distance(a, b) / Local3.distance(this.start, this.end));
-        ctx.moveTo(a.x + norm.x * w, a.y + norm.y * w);
-        ctx.lineTo(b.x + norm.x * w, b.y + norm.y * w);
-        ctx.lineTo(b.x - norm.x * w, b.y - norm.y * w);
-        ctx.lineTo(a.x - norm.x * w, a.y - norm.y * w);
-        ctx.lineTo(a.x + norm.x * w, a.y + norm.y * w);
+        const w0 = this.width_start * (Cartesian2.distance(a, b) / Local3.distance(this.start, this.end));
+        const w1 = this.width_end * (Cartesian2.distance(a, b) / Local3.distance(this.start, this.end));
+        ctx.moveTo(a.x + norm.x * w0, a.y + norm.y * w0);
+        ctx.lineTo(b.x + norm.x * w1, b.y + norm.y * w1);
+        ctx.lineTo(b.x - norm.x * w1, b.y - norm.y * w1);
+        ctx.lineTo(a.x - norm.x * w0, a.y - norm.y * w0);
+        ctx.lineTo(a.x + norm.x * w0, a.y + norm.y * w0);
         ctx.closePath()
         ctx.fill();
     }
@@ -146,11 +151,15 @@ export class Arc {
     radius: number;
     theta0: number; // radians
     dangle: number; // radians, signed
+    width_start: number;
+    width_end: number;
     constructor(centre: Local3, radius: number, theta0: number, dangle: number) {
         this.centre = centre;
         this.radius = radius;
         this.theta0 = theta0;
         this.dangle = dangle;
+        this.width_start = 10;
+        this.width_end = 10;
     }
 
     serialise(): any {
@@ -279,7 +288,8 @@ export class Arc {
         const { centre, rad, theta0, theta1 } = this.get_screenspace_params(viewer);
         const arc_length = this.dangle;
         const half_theta = ang_mod(theta0 + arc_length / 2);
-        const path_width = 20 * (rad / this.radius);
+        const path_width_begin = this.width_start * (rad / this.radius);
+        const path_width_end = this.width_end * (rad / this.radius);
 
         // Convert headings to XY (E-N angle)
         const theta0_XY = Arc.NEtoXY(theta0),
@@ -288,12 +298,17 @@ export class Arc {
 
         ctx.strokeStyle = "yellow";
         ctx.fillStyle = "#ffd040";
+
+        // Draw arc
         ctx.beginPath();
         ctx.arc(centre.x, centre.y, rad, theta0_XY, theta1_XY, arc_length < 0);
         ctx.stroke();
+
+        // Draw centrepoint
         ctx.beginPath();
         ctx.arc(centre.x, centre.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
         ctx.fill();
+        // Draw points at the ends of the arc
         if (!inhibit_endpoints) {
             ctx.beginPath();
             const p1 = this.get_endpoint(centre, rad, theta0_XY);
@@ -305,6 +320,7 @@ export class Arc {
             ctx.fill();
         }
 
+        // Draw arrow in direction of travel
         const half_theta_screen = new Cartesian2(
             centre.x + rad * Math.cos(half_theta_XY),
             centre.y + rad * Math.sin(half_theta_XY)
@@ -338,12 +354,41 @@ export class Arc {
         ctx.fill();
 
 
-        ctx.strokeStyle = "#ffff0050";
-        ctx.lineWidth = path_width;
+        // Draw allowed region transparently around the arc
+        // ctx.strokeStyle = "#ffff0050";
+        // ctx.lineWidth = path_width;
+        // ctx.beginPath();
+        // ctx.arc(centre.x, centre.y, rad, theta0_XY, theta1_XY, arc_length < 0);
+        // ctx.stroke();
+        // ctx.lineWidth = 2;
+        ctx.fillStyle = "#ffff0050";
+        const vertex = (theta: number, side: "Inner" | "Outer", t: number) => {
+            // const t = (theta - theta0_XY) / (theta1_XY - theta0_XY); // fraction of the way round
+            const rad_now = rad + (side == "Inner" ? -1 : 1) * (path_width_begin * (1 - t) + path_width_end * t);
+            const x = rad_now * Math.cos(theta) + centre.x;
+            const y = rad_now * Math.sin(theta) + centre.y;
+            ctx.lineTo(x, y);
+        };
+        const x_start = (rad + path_width_begin) * Math.cos(theta0_XY) + centre.x;
+        const y_start = (rad + path_width_begin) * Math.sin(theta0_XY) + centre.y;
+        const abs_arc_length = Math.abs(arc_length);
+        const n_steps = 32;
+        const s = abs_arc_length / n_steps;
+        const step = arc_length < 0 ? -s : s;
         ctx.beginPath();
-        ctx.arc(centre.x, centre.y, rad, theta0_XY, theta1_XY, arc_length < 0);
-        ctx.stroke();
-        ctx.lineWidth = 2;
+        ctx.moveTo(x_start, y_start);
+        let theta = theta0_XY;
+        for (let i = 0; i < n_steps; i++) {
+            vertex(theta, "Outer", i / n_steps);
+            theta += step;
+        }
+        vertex(theta1_XY, "Outer", 1);
+        for (let theta = theta1_XY, i = n_steps - 1; i >= 0; theta -= step, i--) {
+            vertex(theta, "Inner", i / n_steps);
+        }
+        vertex(theta0_XY, "Inner", 0);
+        ctx.closePath();
+        ctx.fill();
     }
 }
 export function angle_delta(theta0: number, theta1: number): number {
