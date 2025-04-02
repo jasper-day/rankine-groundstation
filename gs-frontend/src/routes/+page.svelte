@@ -91,8 +91,6 @@
             if (viewer && ctx) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 draw_tooltip(mouseX, mouseY);
-                ctx.strokeStyle = "yellow";
-                ctx.fillStyle = "#ffd040";
                 for (const s of shapes.shapes) {
                     s.draw(ctx, viewer);
                 }

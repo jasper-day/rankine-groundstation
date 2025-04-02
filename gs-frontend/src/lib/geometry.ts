@@ -89,6 +89,8 @@ export class Line {
         // TODO cache these?
         const a = viewer.scene.cartesianToCanvasCoordinates(this.start.toCartesian(), scratchc3_a);
         const b = viewer.scene.cartesianToCanvasCoordinates(this.end.toCartesian(), scratchc3_b);
+        ctx.strokeStyle = "yellow";
+        ctx.fillStyle = "#ffd040";
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
@@ -113,6 +115,19 @@ export class Line {
         ctx.lineTo(midpoint_x + dir.x * TRI_SIZE, midpoint_y + dir.y * TRI_SIZE);
         ctx.lineTo(midpoint_x + (norm.x * TRI_SIZE) / 2, midpoint_y + (norm.y * TRI_SIZE) / 2);
         ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = "#ffff0050";
+        ctx.beginPath();
+        const diff = new Cartesian2();
+        Cartesian2.subtract(a, b, diff);
+        const w = 10 * (Cartesian2.distance(a, b) / Local3.distance(this.start, this.end));
+        ctx.moveTo(a.x + norm.x * w, a.y + norm.y * w);
+        ctx.lineTo(b.x + norm.x * w, b.y + norm.y * w);
+        ctx.lineTo(b.x - norm.x * w, b.y - norm.y * w);
+        ctx.lineTo(a.x - norm.x * w, a.y - norm.y * w);
+        ctx.lineTo(a.x + norm.x * w, a.y + norm.y * w);
+        ctx.closePath()
         ctx.fill();
     }
 
@@ -264,11 +279,15 @@ export class Arc {
         const { centre, rad, theta0, theta1 } = this.get_screenspace_params(viewer);
         const arc_length = this.dangle;
         const half_theta = ang_mod(theta0 + arc_length / 2);
+        const path_width = 20 * (rad / this.radius);
 
         // Convert headings to XY (E-N angle)
         const theta0_XY = Arc.NEtoXY(theta0),
             theta1_XY = Arc.NEtoXY(theta1),
             half_theta_XY = Arc.NEtoXY(half_theta);
+
+        ctx.strokeStyle = "yellow";
+        ctx.fillStyle = "#ffd040";
         ctx.beginPath();
         ctx.arc(centre.x, centre.y, rad, theta0_XY, theta1_XY, arc_length < 0);
         ctx.stroke();
@@ -317,6 +336,14 @@ export class Arc {
         ctx.moveTo(arrow_point.x, arrow_point.y);
         ctx.closePath();
         ctx.fill();
+
+
+        ctx.strokeStyle = "#ffff0050";
+        ctx.lineWidth = path_width;
+        ctx.beginPath();
+        ctx.arc(centre.x, centre.y, rad, theta0_XY, theta1_XY, arc_length < 0);
+        ctx.stroke();
+        ctx.lineWidth = 2;
     }
 }
 export function angle_delta(theta0: number, theta1: number): number {
