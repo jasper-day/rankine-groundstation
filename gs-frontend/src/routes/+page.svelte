@@ -105,7 +105,10 @@
                     if (!mouse_cartesian) return;
                     const mouse_local = Local3.fromCartesian(mouse_cartesian);
 
-                    const c = viewer.scene.cartesianToCanvasCoordinates(intermediate_points[0].toCartesian(), scratchc3_a);
+                    const c = viewer.scene.cartesianToCanvasCoordinates(
+                        intermediate_points[0].toCartesian(),
+                        scratchc3_a
+                    );
                     if (Cartesian2.distance(c, new Cartesian2(mouseX, mouseY)) < 5) {
                         if (has_moved_away) {
                             tool = tool == "Line" ? "Arc" : "Line";
@@ -232,8 +235,20 @@
     function keypress(event: KeyboardEvent) {
         if (event.key == "l") {
             tool = "Line";
-        } else if (event.key == "a") {
-            tool = "Arc";
+            if (shapes.shapes.length > 0) {
+                const shape = shapes.shapes[shapes.shapes.length - 1];
+                if (shape instanceof Line) {
+                    intermediate_points = [shape.end];
+                } else if (shape instanceof Arc) {
+                    intermediate_points = [
+                        new Local3(
+                            shape.centre.x + shape.radius * Math.cos(-Arc.NEtoXY(shape.theta0 + shape.dangle)),
+                            shape.centre.y + shape.radius * Math.sin(-Arc.NEtoXY(shape.theta0 + shape.dangle)),
+                            shape.centre.z
+                        )
+                    ];
+                }
+            }
         } else if (event.key == "Escape") {
             tool = "Empty";
             intermediate_points = [];

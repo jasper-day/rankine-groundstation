@@ -276,8 +276,10 @@ export class Arc {
     }
 
     tangent_at_endpoint(): Local3 {
-        const theta = this.theta0;
-        return new Local3(-Math.sin(theta), Math.cos(theta), 0);
+        // there's a lot of multiplying by -1 here
+        // I'm not sure why. but it's all necessary. I think.
+        const theta = -Arc.NEtoXY(ang_mod(this.theta0 + this.dangle));
+        return new Local3(Math.sin(theta), -Math.cos(theta), 0).mul(Math.sign(this.dangle));
     }
     
     static NEtoXY(angle: number) {
