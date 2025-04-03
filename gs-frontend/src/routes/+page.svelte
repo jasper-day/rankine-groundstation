@@ -62,6 +62,7 @@
     // may be premature optimisation but cesium does it so i will too
     const scratchc3_a: Cartesian3 = new Cartesian3();
     const scratchc3_b: Cartesian3 = new Cartesian3();
+    const scratchc3_c: Cartesian3 = new Cartesian3();
 
     let n = new Network();
     n.connect().then(console.log); // TODO handle errors
@@ -210,10 +211,34 @@
                         if (Cartesian2.distanceSquared(b, mouse) < max_sq_dist) {
                             drag_object = { shape_index: idx, point_index: 1 };
                         }
+                        const handle_points = s.allowed_area_handle_points(a, b);
+                        let i = 0;
+                        for (const p of handle_points) {
+                            if (Cartesian2.distanceSquared(p, mouse) < max_sq_dist) {
+                                drag_object = { shape_index: idx, point_index: i + 2 };
+                            }
+                            i += 1;
+                        }
                     } else if (s instanceof Arc) {
-                        const c = viewer.scene.cartesianToCanvasCoordinates(s.centre.toCartesian(), scratchc3_a);
-                        if (Cartesian2.distanceSquared(c, mouse) < max_sq_dist) {
-                            drag_object = { shape_index: idx, point_index: 0 };
+                        const p = s.get_screenspace_params(viewer);
+                        let points = [p.centre, s.get_endpoint_screenspace(p, "Start"), s.get_endpoint_screenspace(p, "End")];
+                        console.log(points, mouse);
+                        let i = 0;
+                        for (const c of points) {
+                            if (Cartesian2.distanceSquared(c, mouse) < max_sq_dist) {
+                                drag_object = { shape_index: idx, point_index: i };
+                                break;
+                            }
+                            i += 1;
+                        }
+
+                        const handle_points = s.allowed_region_handle_points(p);
+                        for (const p of handle_points) {
+                            if (Cartesian2.distanceSquared(p, mouse) < max_sq_dist) {
+                                drag_object = { shape_index: idx, point_index: i };
+                                break;
+                            }
+                            i += 1;
                         }
                     }
                     idx += 1;
@@ -275,20 +300,32 @@
             if (s instanceof Line) {
                 if (drag_object.point_index == 0) {
                     s.start = local;
-                }
-                if (drag_object.point_index == 1) {
+                } else if (drag_object.point_index == 1) {
                     s.end = local;
+                } else {
+                    let index = drag_object.point_index - 2;
+                    let point;
+                    if (index < 2) {
+                        point = s.start;
+                    } else {
+                        point = s.end;
+                    }
+                    // TODO actually project this onto a line normal to the line...
+                    s.width[index] = Local3.distance(point, local);
                 }
             } else if (s instanceof Arc) {
                 if (drag_object.point_index == 0) {
                     // move centre
                     s.centre = local;
                 } else {
-                    // const { centre, rad, theta0, theta1 } = s.get_screenspace_params(viewer);
-                    // let keep_point;
-                    // if (drag_object.point_index == 1) keep_point = s.get_endpoint(centre, rad, theta1);
-                    // else keep_point = s.get_endpoint(centre, rad, theta0);
-                    // const new_s = Arc.from_centre_and_points()
+                    // const p = s.get_screenspace_params(viewer);
+                    // TODO maybe like idk, sqitch direcqtuion simetimes?
+                    let a, b;
+                    if (drag_object.point_index == 1) a = local, b = s.get_endpoint_local("End");
+                    else b = local, a = s.get_endpoint_local("Start");
+                    const rad = Local3.distance(s.centre, local);
+                    const new_s = Arc.from_centre_and_points(s.centre, a, b, s.dangle < 0 ? -1 : 1, rad);
+                    shapes.shapes[drag_object.shape_index] = new_s;
                 }
             }
 

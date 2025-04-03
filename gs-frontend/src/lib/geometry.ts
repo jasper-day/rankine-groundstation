@@ -1,6 +1,5 @@
 import { EcefToEnu, EnuToEcef } from "$lib/projection";
-import { Cartesian3, Color, CornerType, Cartographic, Entity, Viewer, Cartesian2 } from "cesium";
-import type { walk } from "svelte/compiler";
+import { Cartesian3, Cartographic, Viewer, Cartesian2 } from "cesium";
 
 // Some point at buckminster gliding club
 export const ORIGIN = Cartographic.fromDegrees(-0.7097051097617251, 52.830542659049435, 146 + 60); // approx airfield elevation ????
@@ -81,13 +80,11 @@ export class Local3 {
 export class Line {
     start: Local3;
     end: Local3;
-    width_start: [number, number]; // left - right
-    width_end: [number, number];
+    width: [number, number, number, number]; // left - right, front - back
     constructor(start: Local3, end: Local3) {
         this.start = start;
         this.end = end;
-        this.width_start = [10, 20];
-        this.width_end = [10, 20];
+        this.width = [10, 20, 10, 20];
     }
 
     draw(ctx: CanvasRenderingContext2D, viewer: Viewer) {
@@ -127,9 +124,9 @@ export class Line {
         ctx.fillStyle = "#ffff0050";
         ctx.beginPath();
         ctx.moveTo(area_points[0].x, area_points[0].y);
-        for (const pos of area_points.slice(1)) {
-            ctx.lineTo(pos.x, pos.y);
-        }
+        ctx.lineTo(area_points[1].x, area_points[1].y);
+        ctx.lineTo(area_points[3].x, area_points[3].y);
+        ctx.lineTo(area_points[2].x, area_points[2].y);
         ctx.lineTo(area_points[0].x, area_points[0].y);
         ctx.closePath();
         ctx.fill();
@@ -150,19 +147,18 @@ export class Line {
         const diff = new Cartesian2();
         Cartesian2.subtract(a, b, diff);
 
-        const scale_factor = (Cartesian2.distance(a, b) / Local3.distance(this.start, this.end));
+        const scale_factor = Cartesian2.distance(a, b) / Local3.distance(this.start, this.end);
 
-        const w0_l = this.width_start[0] * scale_factor;
-        const w1_l = this.width_end[0] * scale_factor;
-        const w0_r = this.width_start[1] * scale_factor;
-        const w1_r = this.width_end[1] * scale_factor;
+        const w0_l = this.width[0] * scale_factor;
+        const w0_r = this.width[1] * scale_factor;
+        const w1_l = this.width[2] * scale_factor;
+        const w1_r = this.width[3] * scale_factor;
         return [
+            new Cartesian2(a.x - norm.x * w0_l, a.y - norm.y * w0_l),
             new Cartesian2(a.x + norm.x * w0_r, a.y + norm.y * w0_r),
-            new Cartesian2(b.x + norm.x * w1_r, b.y + norm.y * w1_r),
             new Cartesian2(b.x - norm.x * w1_l, b.y - norm.y * w1_l),
-            new Cartesian2(a.x - norm.x * w0_l, a.y - norm.y * w0_l)
+            new Cartesian2(b.x + norm.x * w1_r, b.y + norm.y * w1_r)
         ];
-        
     }
 
     serialise(): any {
@@ -214,8 +210,10 @@ export class Arc {
         return new Arc(new Local3(d.centre[1], d.centre[0], 0), d.radius, d.heading, d.arclength / d.radius);
     }
 
-    static from_centre_and_points(centre: Local3, a: Local3, b: Local3, direction: 1 | -1) {
-        const r = Local3.distance(centre, a);
+    static from_centre_and_points(centre: Local3, a: Local3, b: Local3, direction: 1 | -1, rad?: number) {
+        let r;
+        if (rad === undefined) r = Local3.distance(centre, a);
+        else r = rad;
         // start heading from North to East
         let theta0 = Math.atan2(a.x - centre.x, a.y - centre.y);
         // end heading, N-E
@@ -319,12 +317,21 @@ export class Arc {
         };
     }
 
-    get_endpoint(centre: Cartesian2, rad: number, theta: number): Cartesian2 {
-        const x = centre.x + rad * Math.cos(theta);
-        const y = centre.y + rad * Math.sin(theta);
-        scratchc2.x = x;
-        scratchc2.y = y;
-        return scratchc2;
+    get_endpoint_screenspace(p: ArcScreenspaceParams, which?: "Start" | "End"): Cartesian2 {
+        // Only use this if you already have some screenspace prams. Do not construct screenspace params just for this function.
+        // Instead, use get_endpoint_local and use the viewer to transform that into screenspace.
+        let theta = which == "Start" ? p.theta0_XY : p.theta1_XY;
+        // console.log(which == "Start", Math.abs(theta - p.theta0_XY) < 0.0001);
+        const x = p.centre.x + p.rad * Math.cos(theta);
+        const y = p.centre.y + p.rad * Math.sin(theta);
+        return new Cartesian2(x, y);
+    }
+
+    get_endpoint_local(which?: "Start" | "End"): Local3 {
+        let theta = which == "Start" ? this.theta0 : this.theta0 + this.dangle;
+        const theta_XY = -Arc.NEtoXY(ang_mod(theta));
+        const d = Math.sign(this.dangle);
+        return new Local3(Math.cos(theta_XY) * d + this.centre.x, Math.sin(theta_XY) * d + this.centre.y, this.centre.z * d);
     }
 
     tangent_at_endpoint(): Local3 {
@@ -345,11 +352,11 @@ export class Arc {
         ctx.fill();
         // Draw points at the ends of the arc
         ctx.beginPath();
-        const p1 = this.get_endpoint(p.centre, p.rad, p.theta0_XY);
+        const p1 = this.get_endpoint_screenspace(p, "Start");
         ctx.arc(p1.x, p1.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
         ctx.fill();
         ctx.beginPath();
-        const p2 = this.get_endpoint(p.centre, p.rad, p.theta1_XY);
+        const p2 = this.get_endpoint_screenspace(p);
         ctx.arc(p2.x, p2.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
         ctx.fill();
     }
