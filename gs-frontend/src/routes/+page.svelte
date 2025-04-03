@@ -137,7 +137,7 @@
                             tangent = line.tangent_at_endpoint();
                         }
 
-                        Arc.from_tangent_and_points(tangent, p1, p2).draw(ctx, viewer, false);
+                        Arc.from_tangent_and_points(tangent, p1, p2).draw(ctx, viewer);
                     }
                 }
             }
