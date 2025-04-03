@@ -16,6 +16,10 @@ from functools import partial
 #    "data": {}                <- data dictionary
 # }
 
+# make event loop 1/50th second poll for aircraft info and velocity
+# shove that in the direction of the websocket
+# and create an IGC-style log file (CSV probably)
+
 WS_PORT = 8237
 
 async def handle_messages(drone: System, websocket) -> None:

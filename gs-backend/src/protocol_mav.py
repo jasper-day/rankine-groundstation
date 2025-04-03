@@ -100,7 +100,7 @@ async def protocol_mav(packet: Packet) -> None:
                 roll_deg=data["roll_deg"],
                 pitch_deg=data["pitch_deg"],
                 yaw_deg=data["yaw_deg"],
-                thrust_value=data["thrust"]
+                thrust_value=data["thrust_value"]
             )
 
             try:
