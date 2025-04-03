@@ -1,3 +1,5 @@
+from typing import Any
+
 def print_super_amazing_ascii_text_banner() -> None:
     print(
 """
@@ -22,3 +24,23 @@ def print_start_notice() -> None:
     print("but WITHOUT ANY WARRANTY; without even the implied warranty of")
     print("MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU")
     print("Lesser General Public License for more details.\n")
+
+def assert_item_int(elem: str, obj: Any, min = None, max = None) -> None:
+    if not isinstance(obj[elem], int):
+        raise TypeError(f"Expected {elem} to be an int, got {type(obj[elem])}")
+    
+    if min is not None and obj[elem] < min:
+        raise ValueError(f"Expected {elem} to be greater than {min}, got {obj[elem]}")
+    
+    if max is not None and obj[elem] > max:
+        raise ValueError(f"Expected {elem} to be less than {max}, got {obj[elem]}")
+
+def assert_item_float(elem: str, obj: Any, min = None, max = None) -> None:
+    if not isinstance(obj[elem], float):
+        raise TypeError(f"Expected {elem} to be a float, got {type(obj[elem])}")
+    
+    if min is not None and obj[elem] < min:
+        raise ValueError(f"Expected {elem} to be greater than {min}, got {obj[elem]}")
+    
+    if max is not None and obj[elem] > max:
+        raise ValueError(f"Expected {elem} to be less than {max}, got {obj[elem]}")

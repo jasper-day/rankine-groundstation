@@ -1,7 +1,9 @@
 import json
 from typing import Any
+from mavsdk import System
 
 class Packet:
+    drone: System
     websocket: Any
     message: dict
     
@@ -12,7 +14,8 @@ class Packet:
     replying_to: int | None
     data: dict
 
-    def __init__(self, websocket, message):
+    def __init__(self, drone, websocket, message):
+        self.drone = drone
         self.websocket = websocket
         self.message = message
 

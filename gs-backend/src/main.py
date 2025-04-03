@@ -6,6 +6,8 @@ from protocol_ws import protocol_ws
 from protocol_mav import protocol_mav
 from protocol_path import protocol_path
 from websockets.asyncio.server import serve
+from mavsdk import System
+from functools import partial
 
 # {
 #    "i": 0,                   <- id of packet
@@ -16,7 +18,7 @@ from websockets.asyncio.server import serve
 
 WS_PORT = 8237
 
-async def handle_messages(websocket) -> None:
+async def handle_messages(drone: System, websocket) -> None:
     async for message in websocket:
         async def throw_error(err: str, replying_to: int | None = None) -> None:
             print(f"ERR! {err}")
@@ -49,7 +51,7 @@ async def handle_messages(websocket) -> None:
             await throw_error("No operation specified!", replying_to=message["i"])
             continue
 
-        packet = Packet(websocket, message)
+        packet = Packet(drone, websocket, message)
 
         try:
             match packet.protocol:
@@ -70,7 +72,12 @@ async def main() -> None:
 
     print("Hello from gs-backend!")
 
-    async with serve(handle_messages, "localhost", WS_PORT) as server:
+    drone = System()
+    await drone.connect()
+
+    print("Connected to drone!")
+
+    async with serve(partial(handle_messages, drone), "localhost", WS_PORT) as server:
         print(f"Server started on ws://localhost:{WS_PORT}")
         await server.serve_forever()
 
