@@ -1,16 +1,13 @@
 <script lang="ts">
     // TODO !IMPORTANT
-    // you can make the path segments out of order
-    // move arcs
     // undo
     // delete
     // look into pointer events in chrome (no drag?)
     // canvas resizing
     // split path
-    // draw + change region around path
     // reconnect to backend + show error
-    // finish making new arc definition code
-    // think about control scheme with single line tool
+    // line tangent to previous arc if applicable
+    // make regions C0 continuous
     import "cesium/Build/Cesium/Widgets/widgets.css";
 
     import { Cartesian3, Ion, Math as CesiumMath, Terrain, Viewer, Cartesian2 } from "cesium";
@@ -222,7 +219,6 @@
                     } else if (s instanceof Arc) {
                         const p = s.get_screenspace_params(viewer);
                         let points = [p.centre, s.get_endpoint_screenspace(p, "Start"), s.get_endpoint_screenspace(p, "End")];
-                        console.log(points, mouse);
                         let i = 0;
                         for (const c of points) {
                             if (Cartesian2.distanceSquared(c, mouse) < max_sq_dist) {
@@ -317,15 +313,26 @@
                 if (drag_object.point_index == 0) {
                     // move centre
                     s.centre = local;
-                } else {
+                } else if (drag_object.point_index <= 2) {
                     // const p = s.get_screenspace_params(viewer);
                     // TODO maybe like idk, sqitch direcqtuion simetimes?
                     let a, b;
                     if (drag_object.point_index == 1) a = local, b = s.get_endpoint_local("End");
                     else b = local, a = s.get_endpoint_local("Start");
-                    const rad = Local3.distance(s.centre, local);
-                    const new_s = Arc.from_centre_and_points(s.centre, a, b, s.dangle < 0 ? -1 : 1, rad);
+                    const r = Local3.distance(local, s.centre);
+                    const new_s = Arc.from_centre_and_points(s.centre, a, b, s.dangle < 0 ? -1 : 1, r);
                     shapes.shapes[drag_object.shape_index] = new_s;
+                    shapes.shapes[drag_object.shape_index].width = s.width;
+                } else {
+                    let index = drag_object.point_index - 3;
+                    let point;
+                    if (index < 2) {
+                        point = s.get_endpoint_local("Start");
+                    } else {
+                        point = s.get_endpoint_local("End");
+                    }
+                    // TODO actually project this onto a line normal to the arc...
+                    s.width[index] = Local3.distance(point, local);
                 }
             }
 

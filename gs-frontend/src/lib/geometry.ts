@@ -185,15 +185,13 @@ export class Arc {
     radius: number;
     theta0: number; // radians
     dangle: number; // radians, signed
-    width_start: [number, number];
-    width_end: [number, number];
+    width: [number, number, number, number];
     constructor(centre: Local3, radius: number, theta0: number, dangle: number) {
         this.centre = centre;
         this.radius = radius;
         this.theta0 = theta0;
         this.dangle = dangle;
-        this.width_start = [10, 20];
-        this.width_end = [10, 20];
+        this.width = [10, 20, 10, 20];
     }
 
     serialise(): any {
@@ -310,10 +308,7 @@ export class Arc {
             theta0_XY: theta0_XY,
             theta1_XY: theta1_XY,
             half_theta_XY: half_theta_XY,
-            path_width: [
-                ...this.width_start.map((w) => w * scale_factor),
-                ...this.width_end.map((w) => w * scale_factor)
-            ]
+            path_width: [...this.width.map((w) => w * scale_factor)]
         };
     }
 
@@ -330,8 +325,12 @@ export class Arc {
     get_endpoint_local(which?: "Start" | "End"): Local3 {
         let theta = which == "Start" ? this.theta0 : this.theta0 + this.dangle;
         const theta_XY = -Arc.NEtoXY(ang_mod(theta));
-        const d = Math.sign(this.dangle);
-        return new Local3(Math.cos(theta_XY) * d + this.centre.x, Math.sin(theta_XY) * d + this.centre.y, this.centre.z * d);
+        const d = 1;// Math.sign(this.dangle);
+        return new Local3(
+            this.radius * Math.cos(theta_XY) * d + this.centre.x,
+            this.radius * Math.sin(theta_XY) * d + this.centre.y,
+            this.centre.z * d
+        );
     }
 
     tangent_at_endpoint(): Local3 {
