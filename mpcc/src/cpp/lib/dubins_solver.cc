@@ -11,8 +11,30 @@
 
 #include "dubins_path.h"
 
+Eigen::MatrixXd mpcc::dubins::DubinsSolver::jac(DubinsPath<double>& path,
+                                                drake::VectorX<double> params) {
+  DubinsPath<drake::AutoDiffXd> differentiable_path{path};
+
+  auto constraint_residuals = [&](const auto& x) {
+    using Scalar = typename std::remove_reference_t<decltype(x)>::Scalar;
+    if constexpr (std::is_same_v<Scalar, double>) {
+      return path.get_constraint_residuals(x);
+    } else {
+      // cast to AutoDiffXd
+      drake::VectorX<drake::AutoDiffXd> x_ad =
+          x.template cast<drake::AutoDiffXd>();
+      return differentiable_path.get_constraint_residuals(x_ad);
+    }
+  };
+
+  auto jac = drake::math::jacobian(constraint_residuals, params);
+
+  return drake::math::ExtractGradient(jac);
+}
+
 drake::VectorX<double> mpcc::dubins::DubinsSolver::solve(
-    DubinsPath<double>& path, const std::vector<bool>& dragged_points) {
+    mpcc::dubins::DubinsPath<double>& path,
+    const std::vector<bool>& dragged_points) {
   /* Based on the solver from SolveSpace.
    * See: src/system.cpp in SolveSpace repository
    *

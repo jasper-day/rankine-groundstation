@@ -1,0 +1,3 @@
+[submodule "mpcc/external/acados"]
+	path = mpcc/external/acados
+	url = https://github.com/acados/acados.git

@@ -116,7 +116,7 @@ PYBIND11_MODULE(pydubins, m) {
       .def("get_constraint_residuals",
            [](DubinsPath<T>& self,
               const Eigen::Ref<const Eigen::VectorXd>& values) {
-             return self.get_constraint_residuals(drake::VectorX<T>(values));
+             return self.get_constraint_residuals(drake::VectorX<T>{values});
            })
       .def("n_params", &DubinsPath<T>::n_params)
       .def("n_constraints", &DubinsPath<T>::n_constraints)
@@ -127,7 +127,11 @@ PYBIND11_MODULE(pydubins, m) {
       .def(py::init<>())
       .def(py::init<double, int, int>(), py::arg("tolerance"),
            py::arg("max_iter"), py::arg("debug"))
-      .def("solve", &DubinsSolver::solve);
+      .def("solve", &DubinsSolver::solve)
+      .def("jac", [](DubinsSolver& self, DubinsPath<T>& path,
+                     Eigen::Ref<const Eigen::VectorXd> const& params) {
+        return self.jac(path, drake::VectorX<T>{params});
+      });
 }
 
 }  // namespace pympcc

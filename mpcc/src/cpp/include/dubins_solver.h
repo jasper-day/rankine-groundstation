@@ -34,6 +34,11 @@ class DubinsSolver {
   drake::VectorX<double> solve(DubinsPath<double>& path,
                                const std::vector<bool>& dragged_points);
 
+  /**
+   * @brief get the gradient of the constraint with respect to the parameters
+   */
+  Eigen::MatrixXd jac(DubinsPath<double>& path, drake::VectorX<double> params);
+
  protected:
   double tolerance_;
   int max_iter_;
