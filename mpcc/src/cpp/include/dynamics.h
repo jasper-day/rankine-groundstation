@@ -1,5 +1,6 @@
 #pragma once
 
+#include <drake/common/default_scalars.h>
 #include <drake/common/eigen_types.h>
 
 namespace mpcc {
@@ -39,16 +40,13 @@ class FDM_2D {
   FDM_2D(drake::Vector<T, 3> roll_params, T g)
       : g_(g), roll_params_(roll_params) {}
 
-  void set_g(T g) { g_ = g; }
-  void set_v_A(T v_A) { v_A_ = v_A; }
-  void set_params(drake::Vector<T, 3> params) { params = params }
+  void set_g(T const& g) { g_ = g; }
+  void set_v_A(T const& v_A) { v_A_ = v_A; }
+  void set_params(drake::Vector<T, 3> const& params) { roll_params_ = params; }
 
   /// Scalar-converting copy constructor
   template <typename U>
   FDM_2D(FDM_2D<U> const& other) : FDM_2D(other.roll_params_, other.g) {}
-
-  template <typename U>
-  friend class FDM_2D<U>;
 
   /**
    * Flight dynamics and kinematics
@@ -89,6 +87,8 @@ class FDM_2D {
                                drake::Vector<T, 2> const& wind_NED);
 
  private:
+  template <typename U>
+  friend class FDM_2D;
   /// Acceleration due to gravity (m/s^2)
   T g_;
   /// (Constant) plane velocity
@@ -131,13 +131,19 @@ class FDM_3D {
   // copying the arguments doesn't matter and we don't have to worry about
   // lifetimes
   FDM_3D(drake::Vector<T, 10> coeffs_cl, drake::Vector<T, 10> coeffs_ol, T m,
-         T g = T(9.81))
-      : coeffs_cl_(coeffs_cl), coeffs_ol_(coeffs_ol), m_(m), g_(g) {}
+         T S, T g = T(9.81), T rho = T(1.21))
+      : coeffs_cl_(coeffs_cl),
+        coeffs_ol_(coeffs_ol),
+        m_(m),
+        g_(g),
+        S_(S),
+        rho_(rho) {}
 
   /// Scalar-converting copy constructor
   template <typename U>
   FDM_3D(FDM_3D<U> const& other)
-      : FDM_3D<T>(other.coeffs_cl_, other.coeffs_ol_, other.m_, other.g_) {}
+      : FDM_3D<T>(other.coeffs_cl_, other.coeffs_ol_, other.m_, other.S_,
+                  other.g_, other.rho_) {}
 
   /**
    * Flight dynamics
@@ -218,26 +224,43 @@ class FDM_3D {
   T C_L2() const { return coeffs_ol_(9); }
 
   void set_m(T m) { m_ = m; }
+  void set_S(T S) { S_ = S; }
+  void set_rho(T rho) { rho_ = rho; }
   void set_g(T g) { g_ = g; }
-  void set_coeffs_cl(drake::Vector<T, 10> coeffs_cl) { coeffs_cl_ = coeffs_cl; }
-  void set_coeffs_ol(drake::Vector<T, 10> coeffs_ol) { coeffs_ol_ = coeffs_ol; }
+  void set_coeffs_cl(drake::Vector<T, 10> const& coeffs_cl) {
+    coeffs_cl_ = coeffs_cl;
+  }
+  void set_coeffs_ol(drake::Vector<T, 10> const& coeffs_ol) {
+    coeffs_ol_ = coeffs_ol;
+  }
 
+ private:
+  // For scalar-converting copy constructor
   template <typename U>
   friend class FDM_3D;
 
- private:
   /// Plane mass
   T m_;
   /// Gravity
   T g_;
+  /// Wing surface area
+  T S_;
+  /// Fluid density
+  T rho_;
   /// closed loop coefficients l_p, l_r, l_e_phi, m_0, m_alpha, m_q, m_e_phi,
   /// n_r, n_phi, n_phi_ref
-  drake::Vector<T, 10> const coeffs_cl_;
+  drake::Vector<T, 10> coeffs_cl_;
   /// open loop coefficients C_T1, C_T2, C_T3, tau_T, C_D0, C_Dalpha, C_Dalpha2,
   /// C_L0, C_Lalpha, C_Lalpha2
-  drake::Vector<T, 10> const coeffs_ol_;
+  drake::Vector<T, 10> coeffs_ol_;
 };
 
 }  // namespace dynamics
 
 }  // namespace mpcc
+
+DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
+    class ::mpcc::dynamics::FDM_2D);
+
+DRAKE_DECLARE_CLASS_TEMPLATE_INSTANTIATIONS_ON_DEFAULT_SCALARS(
+    class ::mpcc::dynamics::FDM_3D);

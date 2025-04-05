@@ -17,7 +17,7 @@ class FDM_2D_Plant final : public drake::systems::LeafSystem<T> {
   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(FDM_2D_Plant);
 
   /// Construct a system
-  explicit FDM_2D_Plant(drake::Vector<T, 4> const& roll_params,
+  explicit FDM_2D_Plant(drake::Vector<T, 3> const& roll_params,
                         drake::Vector<T, 1> const& v_A,
                         drake::Vector<T, 1> const& g);
 
