@@ -7,6 +7,10 @@ import pickle
 from pathlib import Path
 import typer
 from time import perf_counter
+from cc_controller import export_cc_controller
+
+Q = np.diag([0.1, 1, 0.01, 0.1])
+R = np.diag([100])
 
 
 def setup_model(x0, phi_max, N_horizon, Tf, RTI=True):
@@ -14,7 +18,9 @@ def setup_model(x0, phi_max, N_horizon, Tf, RTI=True):
 
     omega = 3.4  # natural frequency of roll transfer function
     zeta = 0.8  # damping ratio of roll transfer function
-    model = export_fdm_2d(b0=omega**2, a0=omega**2, a1=2 * zeta * omega)
+    fdm_model = export_fdm_2d(b0=omega**2, a0=omega**2, a1=2 * zeta * omega)
+    # path tracking controller for now
+    model = export_cc_controller(fdm_model, "pt", Q=Q, R=R)
     nx = model.x.rows()
     nu = model.u.rows()
     num_p = model.p.rows()
@@ -37,8 +43,25 @@ def setup_model(x0, phi_max, N_horizon, Tf, RTI=True):
     ocp.constraints.ubx = np.array([phi_max])
     ocp.constraints.idxbx = np.array([5])
 
-    # TODO: set parameter values
-    ocp.parameter_values = np.array([0, -10, 14])
+    # TODO: set parameter values automatically from Dubins path
+    ocp.parameter_values = np.array(
+        [
+            0,  # w_n
+            -8,  # w_e
+            14,  # v_A
+            1,  # circular segment
+            0,  # c_n
+            0,  # c_e
+            -50,  # radius
+            0,  # unused
+            50 * 2 * np.pi,  # s_sw, go around circle once
+            1,  # circular segment
+            0,  # c_n
+            0,  # c_e
+            50,  # go in the other direction
+            0,  # unused
+        ]
+    )
 
     # set prediction horizon
     ocp.solver_options.N_horizon = N_horizon
