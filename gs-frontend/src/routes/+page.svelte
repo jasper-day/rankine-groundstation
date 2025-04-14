@@ -8,6 +8,31 @@
     // reconnect to backend + show error
     // line tangent to previous arc if applicable
     // make regions C0 continuous
+    // fix arrow rendering on arcs when in 3d mode
+
+    // drag plane??
+    // Jasper Day: Controller / frontend integration:
+    // Frontend sends information to the controller in the form of a Dubins path
+    // Controller sends information to the frontend in the form of
+    // - list of positions over the next 6 seconds (continually updated)
+    // - Current (simulated) position of the airplane
+    // Jasper Day: It would be very nice to visualize the position history of the airplaneand the projected position in real time as they're calculated by the controller / simulator (and then eventually from the airplane)
+    // Jasper Day: So we need:
+    // - A schema to pass this data back and forth (just some long arrays)
+    // - visualizations on the frontend
+ 
+    // Jasper Day: idea (not final)
+    // {
+    // curr_pos: number[2],
+    // projected_pos: number[60],
+    // // other things
+    // heading: number
+    // commanded roll angle: number
+    // actual roll angle: number
+    // timestep: number
+    // currentArclengthAlongPath: number
+    // ...
+    // }
     import "cesium/Build/Cesium/Widgets/widgets.css";
 
     import { Cartesian3, Ion, Math as CesiumMath, Terrain, Viewer, Cartesian2 } from "cesium";

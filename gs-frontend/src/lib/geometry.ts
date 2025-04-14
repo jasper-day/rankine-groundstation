@@ -269,7 +269,6 @@ export class Arc {
         //     x = (-a²m_t + 2a(b-d) + m_t(b² - 2bd + c² + d²)/(2(m_t(c-a) + b - d))
         // Use either of the two previous equations to find the y coordinate given x
         //     y = (-1/m_t)(x-a) + b
-        ``;
         const m_t = tangent.y / tangent.x;
         const a = p1.x;
         const b = p1.y;
@@ -387,38 +386,27 @@ export class Arc {
             this.centre.z
         );
 
-        const norm = half_theta_pos.sub(this.centre);
-        if (norm.mag2() < 0.1) {
+        const half_theta_screen = v.scene.cartesianToCanvasCoordinates(half_theta_pos.toCartesian());
+        const centre_screen     = v.scene.cartesianToCanvasCoordinates(this.centre.toCartesian());
+
+        const norm = new Cartesian2();
+        Cartesian2.subtract(half_theta_screen, centre_screen, norm);
+        if (Cartesian2.magnitudeSquared(norm) < 0.1) {
             return;
         }
 
-        norm.normalise();
+        Cartesian2.normalize(norm, norm);
 
-        // TODO awful hack to figure out the triangle size in local coords...
-        const tri_size_local = TRI_SIZE / Cartesian2.distance(v.scene.cartesianToCanvasCoordinates(new Local3(0, 0, 0).toCartesian()), v.scene.cartesianToCanvasCoordinates(new Local3(1, 0, 0).toCartesian()));
-        const tangent = new Cartesian2(norm.y, -norm.x);
-        Cartesian2.multiplyByScalar(tangent, -Math.sign(this.dangle), tangent);
-        const arrow_point = v.scene.cartesianToCanvasCoordinates(new Local3(
-            half_theta_pos.x - (tangent.x * tri_size_local) / 2,
-            half_theta_pos.y - (tangent.y * tri_size_local) / 2,
-            this.centre.z
-        ).toCartesian());
-        const arrow_base_inner = v.scene.cartesianToCanvasCoordinates(new Local3(
-            half_theta_pos.x + ((tangent.x + norm.x) * tri_size_local) / 2,
-            half_theta_pos.y + ((tangent.y + norm.y) * tri_size_local) / 2,
-            this.centre.z
-        ).toCartesian());
-        const arrow_base_outer = v.scene.cartesianToCanvasCoordinates(new Local3(
-            half_theta_pos.x + ((tangent.x - norm.x) * tri_size_local) / 2,
-            half_theta_pos.y + ((tangent.y - norm.y) * tri_size_local) / 2,
-            this.centre.z,
-        ).toCartesian());
-
+        const tangent = new Cartesian2(-norm.y, norm.x);
+        Cartesian2.multiplyByScalar(tangent, Math.sign(this.dangle), tangent);
+        const dir = tangent;
+        const midpoint_x = half_theta_screen.x - (TRI_SIZE / 2) * dir.x;
+        const midpoint_y = half_theta_screen.y - (TRI_SIZE / 2) * dir.y;
         ctx.beginPath();
-        ctx.moveTo(arrow_point.x, arrow_point.y);
-        ctx.lineTo(arrow_base_inner.x, arrow_base_inner.y);
-        ctx.lineTo(arrow_base_outer.x, arrow_base_outer.y);
-        ctx.moveTo(arrow_point.x, arrow_point.y);
+        ctx.moveTo(midpoint_x + (norm.x * TRI_SIZE) / 2, midpoint_y + (norm.y * TRI_SIZE) / 2);
+        ctx.lineTo(midpoint_x - (norm.x * TRI_SIZE) / 2, midpoint_y - (norm.y * TRI_SIZE) / 2);
+        ctx.lineTo(midpoint_x + dir.x * TRI_SIZE, midpoint_y + dir.y * TRI_SIZE);
+        ctx.lineTo(midpoint_x + (norm.x * TRI_SIZE) / 2, midpoint_y + (norm.y * TRI_SIZE) / 2);
         ctx.closePath();
         ctx.fill();
     }
