@@ -59,7 +59,6 @@
     // may be premature optimisation but cesium does it so i will too
     const scratchc3_a: Cartesian3 = new Cartesian3();
     const scratchc3_b: Cartesian3 = new Cartesian3();
-    const scratchc3_c: Cartesian3 = new Cartesian3();
 
     let n = new Network();
     n.connect().then(console.log); // TODO handle errors
@@ -118,7 +117,22 @@
                     }
 
                     if (tool == "Line") {
-                        new Line(intermediate_points[0], mouse_local).draw(ctx, viewer);
+                        let end;
+                        if (shapes.shapes.length > 0) {
+                            const dist = Local3.distance(intermediate_points[0], mouse_local);
+                            const s = shapes.shapes[shapes.shapes.length - 1];
+                            let dir;
+                            if (s instanceof Line) {
+                                dir = s.end.sub(s.start);
+                                dir = dir.mul(1.0 / dir.mag());
+                            } else {
+                                dir = s.tangent_at_endpoint();
+                            }
+                            end = dir.mul(dist);
+                        } else {
+                            end = mouse_local;
+                        }
+                        new Line(intermediate_points[0], end).draw(ctx, viewer);
                     }
                     if (tool == "Arc" && intermediate_points.length > 0) {
                         const p1 = intermediate_points[0];

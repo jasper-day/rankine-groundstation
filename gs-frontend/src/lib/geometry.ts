@@ -68,6 +68,9 @@ export class Local3 {
     mul(s: number): Local3 {
         return new Local3(this._x * s, this._y * s, this._z * s);
     }
+    mag(): number {
+        return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
+    }
 
     static distance(a: Local3, b: Local3): number {
         const dx = a.x - b.x;
