@@ -4,6 +4,7 @@ from matplotlib import gridspec
 from matplotlib.animation import FuncAnimation
 from typing import Optional
 from acados_template import latexify_plot
+from mpcc.pydubins import DubinsPath
 
 
 def plot_fdm(
@@ -14,6 +15,7 @@ def plot_fdm(
     x: np.ndarray,
     x_labels: list[str],
     u_labels: list[str],
+    path: Optional[DubinsPath] = None,
     gs: Optional[gridspec.GridSpec] = None,
     time_label="$t$",
     latexify=True,
@@ -41,11 +43,11 @@ def plot_fdm(
 
     nx = x.shape[1]
     assert nx == 7
-    phi = x[:, 0]
-    phi_ref = x[:, 5]
-    north = x[:, 3]
-    east = x[:, 4]
+    north = x[:, 0]
+    east = x[:, 1]
     xi = x[:, 2]
+    phi = x[:, 3]
+    phi_ref = x[:, 5]
 
     if gs is None:
         gs = gridspec.GridSpec(3, 1, plt.gcf(), height_ratios=[1, 1, 5])
@@ -67,6 +69,7 @@ def plot_fdm(
 
     plt.subplot(gs[1])
     plt.plot(t, xi_deg, color=color, label=r"$\xi$ [deg]")
+    plt.xlabel(time_label)
     if plot_legend:
         plt.legend(loc="right")
     plt.grid()
@@ -74,11 +77,17 @@ def plot_fdm(
     plt.subplot(gs[2])
     plt.gca().set_aspect("equal")
     th = np.linspace(0, 2 * np.pi, 1000, endpoint=True)
-    r = 60
-    cth = np.cos(th) * r
-    sth = np.sin(th) * r
-    if plot_legend:
-        plt.plot(cth, sth, color="C0", linestyle="--")
+    if path is None:
+        # plot a circle of radius 60
+        r = 60
+        cth = np.cos(th) * r
+        sth = np.sin(th) * r
+        if plot_legend:
+            plt.plot(cth, sth, color="C0", linestyle="--")
+    else:
+        th = np.linspace(0, path.length(), 500)
+        locs = np.array([path.eval(t) for t in th])
+        plt.plot(locs[:, 1], locs[:, 0], color="C0", linestyle="--")  # east then north
     plt.plot(east, north, color=color, label=r"$x$", linestyle=linestyle)
     plt.scatter(east[0], north[0], marker="^", c="C1")
     plt.scatter(east[-1], north[-1], marker="s", c="C1")

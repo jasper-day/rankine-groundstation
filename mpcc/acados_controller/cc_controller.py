@@ -34,7 +34,7 @@ params_1: float[4],
 from acados_template import AcadosModel
 from typing import Literal
 from fdm2d import export_fdm_2d
-from casadi import SX, vertcat, if_else, dot, norm_2, fabs, atan2
+from casadi import SX, vertcat, if_else, dot, norm_2, fabs, atan2, fmod
 import numpy as np
 import scipy.linalg
 
@@ -44,6 +44,7 @@ def export_cc_controller(
     controller_type: Literal["pt", "empcc"],
     Q: np.ndarray,
     R: np.ndarray,
+    rho: float | None = None,
 ) -> AcadosModel:
     x = model.x
     u = model.u
@@ -70,7 +71,7 @@ def export_cc_controller(
     # = 0 for line segment, = 1 for circular segment
     type_0 = SX.sym("type_curr")
     # for line segment: x0, y0, x1, y1
-    # for circular segment: c_x, c_y, +- radius
+    # for circular segment: c_x, c_y, +- radius, unused
     params_0 = SX.sym("p_curr", 4)
     # arclength to switch from current to next segment
     s_switch = SX.sym("s_switch")
@@ -103,8 +104,8 @@ def export_cc_controller(
         dot(dpos, line_b - line_a) / norm_2(line_b - line_a),
     )
 
-    ny = 6
-    ny_e = 5
+    ny = 5
+    ny_e = 4
     y = SX.sym("y", ny)
     y_e = SX.sym("y", ny_e)
 
@@ -136,10 +137,11 @@ def export_cc_controller(
         # line
         atan2(line_ba[1], line_ba[0]),
     )
-    e_chi = chi - chi_d
+    # wrap to between +- np.pi
+    e_chi = fmod(chi - chi_d + np.pi, 2 * np.pi) - np.pi
 
     # lagrange cost measurements
-    y[0] = e_chi if controller_type == "pt" else -ds
+    y[0] = e_chi if controller_type == "pt" else -ds * rho
     y[1] = norm_2(e_c)
     y[2] = phi
     y[3] = dphi

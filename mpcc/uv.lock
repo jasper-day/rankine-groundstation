@@ -580,6 +580,7 @@ dependencies = [
     { name = "acados-template" },
     { name = "drake" },
     { name = "numpy" },
+    { name = "pydantic" },
 ]
 
 [package.optional-dependencies]
@@ -605,6 +606,7 @@ requires-dist = [
     { name = "drake", specifier = "<0.1" },
     { name = "numpy" },
     { name = "pybind11", marker = "extra == 'dev'" },
+    { name = "pydantic", specifier = ">=2.10.6" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "scikit-build-core", marker = "extra == 'dev'", specifier = ">=0.10" },
 ]

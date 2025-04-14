@@ -1,2 +1,5 @@
 __pycache__/
 .vscode/
+mpcc/acados_controller/c_generated_code
+mpcc/acados_controller/figures
+mpcc/acados_controller/pickled_data
