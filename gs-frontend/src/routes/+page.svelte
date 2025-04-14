@@ -101,6 +101,7 @@
                     );
                     if (!mouse_cartesian) return;
                     const mouse_local = Local3.fromCartesian(mouse_cartesian);
+                    mouse_local.z = 100; // for now, we define the path always at 100m above surface
 
                     const c = viewer.scene.cartesianToCanvasCoordinates(
                         intermediate_points[0].toCartesian(),
@@ -173,23 +174,25 @@
                 viewer.scene.ellipsoid
             );
             if (!cartesian) return; // just ignore an invalid position
+            const mouse_local = Local3.fromCartesian(cartesian);
+            mouse_local.z = 100; // for now, we define the path always at 100m above surface
 
             if (tool == "Line") {
                 if (intermediate_points.length == 0) {
                     // add first point
-                    intermediate_points.push(Local3.fromCartesian(cartesian));
+                    intermediate_points.push(mouse_local);
                 } else {
                     const p1 = intermediate_points[0];
-                    const p2 = Local3.fromCartesian(cartesian);
+                    const p2 = mouse_local;
                     shapes.add_shape(new Line(p1, p2));
-                    intermediate_points = [Local3.fromCartesian(cartesian)];
+                    intermediate_points = [mouse_local];
                     tool = "Arc";
                     has_moved_away = false;
                 }
             } else if (tool == "Arc") {
                 // TODO maybe include old code for defining first arc?
                 const p1 = intermediate_points[0];
-                const p2 = Local3.fromCartesian(cartesian);
+                const p2 = mouse_local;
                 // Points are too close, can't make an arc
                 if (Local3.distance(p1, p2) < 0.01) return;
 
@@ -222,7 +225,7 @@
                         if (Cartesian2.distanceSquared(b, mouse) < max_sq_dist) {
                             drag_object = { shape_index: idx, point_index: 1 };
                         }
-                        const handle_points = s.allowed_area_handle_points(a, b);
+                        const handle_points = s.allowed_area_handle_points(viewer);
                         let i = 0;
                         for (const p of handle_points) {
                             if (Cartesian2.distanceSquared(p, mouse) < max_sq_dist) {
@@ -231,6 +234,7 @@
                             i += 1;
                         }
                     } else if (s instanceof Arc) {
+                        // TODO not needed? just do s.get_endpoint & convert it to screenspace
                         const p = s.get_screenspace_params(viewer);
                         let points = [p.centre, s.get_endpoint_screenspace(p, "Start"), s.get_endpoint_screenspace(p, "End")];
                         let i = 0;
@@ -242,7 +246,7 @@
                             i += 1;
                         }
 
-                        const handle_points = s.allowed_region_handle_points(p);
+                        const handle_points = s.allowed_region_handle_points(viewer);
                         for (const p of handle_points) {
                             if (Cartesian2.distanceSquared(p, mouse) < max_sq_dist) {
                                 drag_object = { shape_index: idx, point_index: i };

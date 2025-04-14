@@ -32,15 +32,15 @@ export class Local3 {
         return EcefToEnu(c, ORIGIN);
     }
     set x(x: number) {
-        this.x = x;
+        this._x = x;
         this._cache_c3 = undefined;
     }
     set y(y: number) {
-        this.y = y;
+        this._y = y;
         this._cache_c3 = undefined;
     }
     set z(z: number) {
-        this.z = z;
+        this._z = z;
         this._cache_c3 = undefined;
     }
     get x(): number {
@@ -71,12 +71,22 @@ export class Local3 {
     mag(): number {
         return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
     }
+    mag2(): number {
+        return this.x * this.x + this.y * this.y + this.z * this.z;
+    }
 
     static distance(a: Local3, b: Local3): number {
         const dx = a.x - b.x;
         const dy = a.y - b.y;
         const dz = a.z - b.z;
         return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    normalise() {
+        const inv_mag = 1.0 / this.mag();
+        this.x *= inv_mag;
+        this.y *= inv_mag;
+        this.z *= inv_mag;
     }
 }
 
@@ -122,7 +132,7 @@ export class Line {
         ctx.closePath();
         ctx.fill();
 
-        const area_points = this.allowed_area_handle_points(a, b);
+        const area_points = this.allowed_area_handle_points(viewer);
 
         ctx.fillStyle = "#ffff0050";
         ctx.beginPath();
@@ -142,26 +152,24 @@ export class Line {
         }
     }
 
-    allowed_area_handle_points(a: Cartesian2, b: Cartesian2): [Cartesian2, Cartesian2, Cartesian2, Cartesian2] {
-        let dir = new Cartesian2(b.x - a.x, b.y - a.y);
-        Cartesian2.normalize(dir, dir);
+    allowed_area_handle_points(v: Viewer): [Cartesian2, Cartesian2, Cartesian2, Cartesian2] {
+        const a = this.start;
+        const b = this.end;
+        const dir = new Local3(b.x - a.x, b.y - a.y, b.z - a.z);
+        dir.normalise();
 
-        const norm = new Cartesian2(-dir.y, dir.x);
-        const diff = new Cartesian2();
-        Cartesian2.subtract(a, b, diff);
+        const norm = new Local3(-dir.y, dir.x, 0);
 
-        const scale_factor = Cartesian2.distance(a, b) / Local3.distance(this.start, this.end);
-
-        const w0_l = this.width[0] * scale_factor;
-        const w0_r = this.width[1] * scale_factor;
-        const w1_l = this.width[2] * scale_factor;
-        const w1_r = this.width[3] * scale_factor;
+        const w0_r = this.width[0];
+        const w0_l = this.width[1];
+        const w1_r = this.width[2];
+        const w1_l = this.width[3];
         return [
-            new Cartesian2(a.x - norm.x * w0_l, a.y - norm.y * w0_l),
-            new Cartesian2(a.x + norm.x * w0_r, a.y + norm.y * w0_r),
-            new Cartesian2(b.x - norm.x * w1_l, b.y - norm.y * w1_l),
-            new Cartesian2(b.x + norm.x * w1_r, b.y + norm.y * w1_r)
-        ];
+            new Local3(a.x - norm.x * w0_l, a.y - norm.y * w0_l, a.z),
+            new Local3(a.x + norm.x * w0_r, a.y + norm.y * w0_r, a.z),
+            new Local3(b.x - norm.x * w1_l, b.y - norm.y * w1_l, b.z),
+            new Local3(b.x + norm.x * w1_r, b.y + norm.y * w1_r, b.z)
+        ].map((p) => v.scene.cartesianToCanvasCoordinates(p.toCartesian())) as [Cartesian2, Cartesian2, Cartesian2, Cartesian2];
     }
 
     serialise(): any {
@@ -195,6 +203,14 @@ export class Arc {
         this.theta0 = theta0;
         this.dangle = dangle;
         this.width = [10, 20, 10, 20];
+    }
+
+    theta1() {
+        return ang_mod(this.theta0 + this.dangle);
+    }
+
+    half_theta() {
+        return ang_mod(this.theta0 + this.dangle / 2);
     }
 
     serialise(): any {
@@ -347,48 +363,57 @@ export class Arc {
         return angle - Math.PI / 2;
     }
 
-    draw_handle_points(ctx: CanvasRenderingContext2D, p: ArcScreenspaceParams) {
+    draw_handle_points(ctx: CanvasRenderingContext2D, v: Viewer) {
         // Draw centrepoint
         ctx.beginPath();
-        ctx.arc(p.centre.x, p.centre.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
+        const centre = v.scene.cartesianToCanvasCoordinates(this.centre.toCartesian());
+        ctx.arc(centre.x, centre.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
         ctx.fill();
         // Draw points at the ends of the arc
         ctx.beginPath();
-        const p1 = this.get_endpoint_screenspace(p, "Start");
+        const p1 = v.scene.cartesianToCanvasCoordinates(this.get_endpoint_local("Start").toCartesian());
         ctx.arc(p1.x, p1.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
         ctx.fill();
         ctx.beginPath();
-        const p2 = this.get_endpoint_screenspace(p);
+        const p2 = v.scene.cartesianToCanvasCoordinates(this.get_endpoint_local("End").toCartesian());
         ctx.arc(p2.x, p2.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
         ctx.fill();
     }
 
-    draw_direction_arrow(ctx: CanvasRenderingContext2D, p: ArcScreenspaceParams) {
-        const half_theta_screen = new Cartesian2(
-            p.centre.x + p.rad * Math.cos(p.half_theta_XY),
-            p.centre.y + p.rad * Math.sin(p.half_theta_XY)
+    draw_direction_arrow(ctx: CanvasRenderingContext2D, v: Viewer) {
+        const half_theta_pos = new Local3(
+            this.centre.x + this.radius * Math.cos(Math.PI / 2 - this.half_theta()),
+            this.centre.y + this.radius * Math.sin(Math.PI / 2 - this.half_theta()),
+            this.centre.z
         );
 
-        const norm = new Cartesian2();
-        Cartesian2.subtract(half_theta_screen, p.centre, norm);
-        if (Cartesian2.magnitudeSquared(norm) < 0.1) {
+        const norm = half_theta_pos.sub(this.centre);
+        if (norm.mag2() < 0.1) {
             return;
         }
-        Cartesian2.normalize(norm, norm);
-        const tangent = new Cartesian2(-norm.y, norm.x);
+
+        norm.normalise();
+
+        // TODO awful hack to figure out the triangle size in local coords...
+        const tri_size_local = TRI_SIZE / Cartesian2.distance(v.scene.cartesianToCanvasCoordinates(new Local3(0, 0, 0).toCartesian()), v.scene.cartesianToCanvasCoordinates(new Local3(1, 0, 0).toCartesian()));
+        const tangent = new Cartesian2(norm.y, -norm.x);
         Cartesian2.multiplyByScalar(tangent, -Math.sign(this.dangle), tangent);
-        const arrow_point = new Cartesian2(
-            half_theta_screen.x - (tangent.x * TRI_SIZE) / 2,
-            half_theta_screen.y - (tangent.y * TRI_SIZE) / 2
-        );
-        const arrow_base_inner = new Cartesian2(
-            half_theta_screen.x + ((tangent.x + norm.x) * TRI_SIZE) / 2,
-            half_theta_screen.y + ((tangent.y + norm.y) * TRI_SIZE) / 2
-        );
-        const arrow_base_outer = new Cartesian2(
-            half_theta_screen.x + ((tangent.x - norm.x) * TRI_SIZE) / 2,
-            half_theta_screen.y + ((tangent.y - norm.y) * TRI_SIZE) / 2
-        );
+        const arrow_point = v.scene.cartesianToCanvasCoordinates(new Local3(
+            half_theta_pos.x - (tangent.x * tri_size_local) / 2,
+            half_theta_pos.y - (tangent.y * tri_size_local) / 2,
+            this.centre.z
+        ).toCartesian());
+        const arrow_base_inner = v.scene.cartesianToCanvasCoordinates(new Local3(
+            half_theta_pos.x + ((tangent.x + norm.x) * tri_size_local) / 2,
+            half_theta_pos.y + ((tangent.y + norm.y) * tri_size_local) / 2,
+            this.centre.z
+        ).toCartesian());
+        const arrow_base_outer = v.scene.cartesianToCanvasCoordinates(new Local3(
+            half_theta_pos.x + ((tangent.x - norm.x) * tri_size_local) / 2,
+            half_theta_pos.y + ((tangent.y - norm.y) * tri_size_local) / 2,
+            this.centre.z,
+        ).toCartesian());
+
         ctx.beginPath();
         ctx.moveTo(arrow_point.x, arrow_point.y);
         ctx.lineTo(arrow_base_inner.x, arrow_base_inner.y);
@@ -398,12 +423,54 @@ export class Arc {
         ctx.fill();
     }
 
-    draw_allowed_region(ctx: CanvasRenderingContext2D, p: ArcScreenspaceParams) {
+    draw_allowed_region(ctx: CanvasRenderingContext2D, v: Viewer) {
         ctx.fillStyle = "#ffff0050";
 
         const vertex = (theta: number, side: "Inner" | "Outer", t: number) => {
-            const [x, y] = this.vertex_pos(theta, side, t, p);
+            const [x, y] = this.vertex_pos(theta, side, t, v);
             ctx.lineTo(x, y);
+        };
+
+        const abs_arc_length = Math.abs(this.dangle);
+        const n_steps = 32;
+        const s = abs_arc_length / n_steps;
+        const step = this.dangle < 0 ? -s : s;
+        const theta1 = ang_mod(this.theta0 + this.dangle);
+
+        ctx.beginPath();
+        const [x_start, y_start] = this.vertex_pos(this.theta0, "Outer", 0, v);
+        ctx.moveTo(x_start, y_start);
+
+        let theta = this.theta0;
+        for (let i = 0; i < n_steps; i++) {
+            vertex(theta, "Outer", i / n_steps);
+            theta += step;
+        }
+        vertex(theta1, "Outer", 1);
+        for (let theta = theta1, i = n_steps - 1; i >= 0; theta -= step, i--) {
+            vertex(theta, "Inner", i / n_steps);
+        }
+        vertex(this.theta0, "Inner", 0);
+
+        ctx.closePath();
+        ctx.fill();
+
+        // Draw handle points to control width of allowed region
+        ctx.fillStyle = "#ffd040";
+        for (const pos of this.allowed_region_handle_points(v)) {
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+    }
+
+    draw_arc(ctx: CanvasRenderingContext2D, v: Viewer) {
+        const vertex = (theta: number, first?: boolean) => {
+            const local_x = this.radius * Math.cos(Math.PI / 2 - theta) + this.centre.x;
+            const local_y = this.radius * Math.sin(Math.PI / 2 - theta) + this.centre.y;
+            const pos = v.scene.cartesianToCanvasCoordinates(new Local3(local_x, local_y, this.centre.z).toCartesian());
+            if (first) ctx.moveTo(pos.x, pos.y);
+            else ctx.lineTo(pos.x, pos.y);
         };
 
         const abs_arc_length = Math.abs(this.dangle);
@@ -412,31 +479,29 @@ export class Arc {
         const step = this.dangle < 0 ? -s : s;
 
         ctx.beginPath();
-        const [x_start, y_start] = this.vertex_pos(p.theta0_XY, "Outer", 0, p);
-        ctx.moveTo(x_start, y_start);
-        let theta = p.theta0_XY;
+        vertex(this.theta0, true);
+        let theta = this.theta0;
         for (let i = 0; i < n_steps; i++) {
-            vertex(theta, "Outer", i / n_steps);
+            vertex(theta);
             theta += step;
         }
-        vertex(p.theta1_XY, "Outer", 1);
-        for (let theta = p.theta1_XY, i = n_steps - 1; i >= 0; theta -= step, i--) {
-            vertex(theta, "Inner", i / n_steps);
-        }
-        vertex(p.theta0_XY, "Inner", 0);
-
-        ctx.closePath();
-        ctx.fill();
-
-        // Draw handle points to control width of allowed region
-        ctx.fillStyle = "#ffd040";
-        for (const pos of this.allowed_region_handle_points(p)) {
-            ctx.beginPath();
-            ctx.arc(pos.x, pos.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
-            ctx.fill();
-        }
+        vertex(this.theta1());
+        ctx.stroke();
     }
-    vertex_pos(theta: number, side: "Inner" | "Outer", t: number, p: ArcScreenspaceParams): [number, number] {
+
+    vertex_pos(theta: number, side: "Inner" | "Outer", t: number, viewer: Viewer): [number, number] {
+        // which side we're on, left or right. 0 or 1
+        const f = (side == "Inner" && this.dangle < 0) || (side == "Outer" && this.dangle > 0) ? 0 : 1;
+
+        const rad_now = this.radius + (side == "Inner" ? -1 : 1) * (this.width[0 + f] * (1 - t) + this.width[2 + f] * t);
+        const local_x = rad_now * Math.cos(Math.PI / 2 - theta) + this.centre.x;
+        const local_y = rad_now * Math.sin(Math.PI / 2 - theta) + this.centre.y;
+        const pos = viewer.scene.cartesianToCanvasCoordinates(new Local3(local_x, local_y, this.centre.z).toCartesian());
+        return [pos.x, pos.y];
+    }
+
+    // TODO benchmark this in the case of top down only
+    vertex_pos_(theta: number, side: "Inner" | "Outer", t: number, p: ArcScreenspaceParams): [number, number] {
         // which side we're on, left or right. 0 or 1
         const f = (side == "Inner" && this.dangle < 0) || (side == "Outer" && this.dangle > 0) ? 0 : 1;
         const rad_now = p.rad + (side == "Inner" ? -1 : 1) * (p.path_width[0 + f] * (1 - t) + p.path_width[2 + f] * t);
@@ -445,31 +510,25 @@ export class Arc {
         return [x, y];
     }
 
-    allowed_region_handle_points(p: ArcScreenspaceParams): [Cartesian2, Cartesian2, Cartesian2, Cartesian2] {
+    allowed_region_handle_points(v: Viewer): [Cartesian2, Cartesian2, Cartesian2, Cartesian2] {
         const right = this.dangle > 0 ? "Inner" : "Outer";
         const left = this.dangle > 0 ? "Outer" : "Inner";
         return [
-            Cartesian2.fromArray(this.vertex_pos(p.theta0_XY, left, 0, p)),
-            Cartesian2.fromArray(this.vertex_pos(p.theta0_XY, right, 0, p)),
-            Cartesian2.fromArray(this.vertex_pos(p.theta1_XY, left, 1, p)),
-            Cartesian2.fromArray(this.vertex_pos(p.theta1_XY, right, 1, p))
+            Cartesian2.fromArray(this.vertex_pos(this.theta0, left, 0, v)),
+            Cartesian2.fromArray(this.vertex_pos(this.theta0, right, 0, v)),
+            Cartesian2.fromArray(this.vertex_pos(this.theta1(), left, 1, v)),
+            Cartesian2.fromArray(this.vertex_pos(this.theta1(), right, 1, v))
         ];
     }
 
     draw(ctx: CanvasRenderingContext2D, viewer: Viewer) {
-        const p = this.get_screenspace_params(viewer);
-
         ctx.strokeStyle = "yellow";
         ctx.fillStyle = "#ffd040";
 
-        // Draw arc
-        ctx.beginPath();
-        ctx.arc(p.centre.x, p.centre.y, p.rad, p.theta0_XY, p.theta1_XY, this.dangle < 0);
-        ctx.stroke();
-
-        this.draw_handle_points(ctx, p);
-        this.draw_direction_arrow(ctx, p);
-        this.draw_allowed_region(ctx, p);
+        this.draw_arc(ctx, viewer);
+        this.draw_handle_points(ctx, viewer);
+        this.draw_direction_arrow(ctx, viewer);
+        this.draw_allowed_region(ctx, viewer);
     }
 }
 export function angle_delta(theta0: number, theta1: number): number {
