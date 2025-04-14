@@ -150,11 +150,11 @@
                             let dir;
                             if (s instanceof Line) {
                                 dir = s.end.sub(s.start);
-                                dir = dir.mul(1.0 / dir.mag());
+                                dir.normalise();
                             } else {
                                 dir = s.tangent_at_endpoint();
                             }
-                            end = dir.mul(dist);
+                            end = dir.mul(dist).add(intermediate_points[0]);
                         } else {
                             end = mouse_local;
                         }
@@ -208,9 +208,23 @@
                     intermediate_points.push(mouse_local);
                 } else {
                     const p1 = intermediate_points[0];
-                    const p2 = mouse_local;
+                    let p2;
+                    if (shapes.shapes.length > 0) {
+                        const dist = Local3.distance(intermediate_points[0], mouse_local);
+                        const s = shapes.shapes[shapes.shapes.length - 1];
+                        let dir;
+                        if (s instanceof Line) {
+                            dir = s.end.sub(s.start);
+                            dir.normalise();
+                        } else {
+                            dir = s.tangent_at_endpoint();
+                        }
+                        p2 = dir.mul(dist).add(intermediate_points[0]);
+                    } else {
+                        p2 = mouse_local;
+                    }
                     shapes.add_shape(new Line(p1, p2));
-                    intermediate_points = [mouse_local];
+                    intermediate_points = [p2];
                     tool = "Arc";
                     has_moved_away = false;
                 }
