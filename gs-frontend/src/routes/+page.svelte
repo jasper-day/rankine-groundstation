@@ -390,6 +390,17 @@
                     s.width[index] = Local3.distance(point, local);
                 }
             }
+            // update adjacent widths to maintain C0 continuity
+            let index;
+            if (s instanceof Line) index = drag_object.point_index - 2;
+            else index = drag_object.point_index - 3;
+
+            if (index < 2 && drag_object.shape_index > 0) {
+                shapes[drag_object.shape_index - 1].width[index + 2] = s.width[index];
+            }
+            if (index >= 2 && drag_object.shape_index < shapes.length - 1) {
+                shapes[drag_object.shape_index + 1].width[index - 2] = s.width[index];
+            }
 
             if (editing_mode == "Edit") {
                 close_path();

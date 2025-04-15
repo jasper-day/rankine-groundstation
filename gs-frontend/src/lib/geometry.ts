@@ -97,7 +97,7 @@ export class Line {
     constructor(start: Local3, end: Local3) {
         this.start = start;
         this.end = end;
-        this.width = [10, 20, 10, 20];
+        this.width = [20, 20, 20, 20];
     }
 
     draw(ctx: CanvasRenderingContext2D, viewer: Viewer) {
@@ -198,7 +198,7 @@ export class Arc {
         this.radius = radius;
         this.theta0 = theta0;
         this.dangle = dangle;
-        this.width = [10, 20, 10, 20];
+        this.width = [20, 20, 20, 20];
     }
 
     theta1() {
