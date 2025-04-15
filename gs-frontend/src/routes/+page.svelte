@@ -35,7 +35,7 @@
     // }
     import "cesium/Build/Cesium/Widgets/widgets.css";
 
-    import { Cartesian3, Ion, Math as CesiumMath, Terrain, Viewer, Cartesian2 } from "cesium";
+    import { Cartesian3, Ion, Math as CesiumMath, Terrain, Viewer, Cartesian2, Cartographic } from "cesium";
     import { Arc, HANDLE_POINT_RADIUS, Line, Local3, ORIGIN } from "$lib/geometry";
     import { ConnectionError, Network, ServerError } from "$lib/network";
     import "cesium/Build/Cesium/Widgets/widgets.css";
@@ -333,6 +333,21 @@
         } else if (event.key == "e") {
             close_path();
             editing_mode = "Edit";
+        } else if (event.key == "1" && viewer) {
+            const pos_screen = new Cartesian2(viewer.scene.canvas.clientWidth / 2, viewer.scene.canvas.clientHeight / 2);
+            let pos_cartesian = viewer.camera.pickEllipsoid(pos_screen, viewer.scene.ellipsoid);
+            if (pos_cartesian === undefined) return;
+            let pos_cartographic = Cartographic.fromCartesian(pos_cartesian);
+            pos_cartographic.height = 1000;
+            viewer.camera.flyTo({
+                destination: Cartographic.toCartesian(pos_cartographic),
+                orientation: {
+                    heading: CesiumMath.toRadians(0.0),
+                    pitch: CesiumMath.toRadians(-90.0)
+                },
+                duration: 0
+            });
+            
         }
         draw_tooltip(mouseX, mouseY);
     }
@@ -394,12 +409,13 @@
             let index;
             if (s instanceof Line) index = drag_object.point_index - 2;
             else index = drag_object.point_index - 3;
-
-            if (index < 2 && drag_object.shape_index > 0) {
-                shapes[drag_object.shape_index - 1].width[index + 2] = s.width[index];
-            }
-            if (index >= 2 && drag_object.shape_index < shapes.length - 1) {
-                shapes[drag_object.shape_index + 1].width[index - 2] = s.width[index];
+            if (index >= 0) {
+                if (index < 2 && drag_object.shape_index > 0) {
+                    shapes[drag_object.shape_index - 1].width[index + 2] = s.width[index];
+                }
+                if (index >= 2 && drag_object.shape_index < shapes.length - 1) {
+                    shapes[drag_object.shape_index + 1].width[index - 2] = s.width[index];
+                }
             }
 
             if (editing_mode == "Edit") {
