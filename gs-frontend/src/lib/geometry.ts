@@ -158,18 +158,23 @@ export class Line {
         const dir = new Local3(b.x - a.x, b.y - a.y, b.z - a.z);
         dir.normalise();
 
-        const norm = new Local3(-dir.y, dir.x, 0);
+        const norm = new Local3(dir.y, -dir.x, 0);
 
-        const w0_r = this.width[0];
-        const w0_l = this.width[1];
-        const w1_r = this.width[2];
-        const w1_l = this.width[3];
+        const w0_l = this.width[0];
+        const w0_r = this.width[1];
+        const w1_l = this.width[2];
+        const w1_r = this.width[3];
         return [
             new Local3(a.x - norm.x * w0_l, a.y - norm.y * w0_l, a.z),
             new Local3(a.x + norm.x * w0_r, a.y + norm.y * w0_r, a.z),
             new Local3(b.x - norm.x * w1_l, b.y - norm.y * w1_l, b.z),
             new Local3(b.x + norm.x * w1_r, b.y + norm.y * w1_r, b.z)
-        ].map((p) => v.scene.cartesianToCanvasCoordinates(p.toCartesian())) as [Cartesian2, Cartesian2, Cartesian2, Cartesian2];
+        ].map((p) => v.scene.cartesianToCanvasCoordinates(p.toCartesian())) as [
+            Cartesian2,
+            Cartesian2,
+            Cartesian2,
+            Cartesian2
+        ];
     }
 
     serialise(): any {
@@ -181,15 +186,6 @@ export class Line {
         return new Line(new Local3(d.start[1], d.start[0], 0.0), new Local3(d.end[1], d.end[0], 0.0));
     }
 }
-
-type ArcScreenspaceParams = {
-    centre: Cartesian2;
-    rad: number;
-    theta0_XY: number;
-    theta1_XY: number;
-    half_theta_XY: number;
-    path_width: number[];
-};
 
 export class Arc {
     centre: Local3;
@@ -299,55 +295,13 @@ export class Arc {
         return Arc.from_centre_and_points(centre, p1, p2, dir == 1 ? 1 : -1);
     }
 
-    get_screenspace_params(viewer: Viewer): ArcScreenspaceParams {
-        const centre = viewer.scene.cartesianToCanvasCoordinates(this.centre.toCartesian(), scratchc3_a);
-        // hack to get the radius in screen space
-        const rad_point_local = new Local3(this.centre.x + this.radius, this.centre.y, this.centre.z);
-        const rad_point_screen = viewer.scene.cartesianToCanvasCoordinates(rad_point_local.toCartesian());
-        const rad = Cartesian2.distance(centre, rad_point_screen);
-        const x_axis = new Cartesian2();
-        Cartesian2.subtract(rad_point_screen, centre, x_axis);
-        // heading from North to East
-        const dtheta = Math.atan2(x_axis.y, x_axis.x);
-
-        const arc_length = this.dangle;
-        const theta0 = ang_mod(this.theta0 + dtheta);
-        const theta1 = ang_mod(theta0 + arc_length);
-        const half_theta = ang_mod(theta0 + arc_length / 2);
-        // Convert headings to XY (E-N angle)
-        const theta0_XY = Arc.NEtoXY(theta0),
-            theta1_XY = Arc.NEtoXY(theta1),
-            half_theta_XY = Arc.NEtoXY(half_theta);
-
-        const scale_factor = rad / this.radius;
-        return {
-            centre: centre,
-            rad: rad,
-            theta0_XY: theta0_XY,
-            theta1_XY: theta1_XY,
-            half_theta_XY: half_theta_XY,
-            path_width: [...this.width.map((w) => w * scale_factor)]
-        };
-    }
-
-    get_endpoint_screenspace(p: ArcScreenspaceParams, which?: "Start" | "End"): Cartesian2 {
-        // Only use this if you already have some screenspace prams. Do not construct screenspace params just for this function.
-        // Instead, use get_endpoint_local and use the viewer to transform that into screenspace.
-        let theta = which == "Start" ? p.theta0_XY : p.theta1_XY;
-        // console.log(which == "Start", Math.abs(theta - p.theta0_XY) < 0.0001);
-        const x = p.centre.x + p.rad * Math.cos(theta);
-        const y = p.centre.y + p.rad * Math.sin(theta);
-        return new Cartesian2(x, y);
-    }
-
     get_endpoint_local(which?: "Start" | "End"): Local3 {
         let theta = which == "Start" ? this.theta0 : this.theta0 + this.dangle;
         const theta_XY = -Arc.NEtoXY(ang_mod(theta));
-        const d = 1;// Math.sign(this.dangle);
         return new Local3(
-            this.radius * Math.cos(theta_XY) * d + this.centre.x,
-            this.radius * Math.sin(theta_XY) * d + this.centre.y,
-            this.centre.z * d
+            this.radius * Math.cos(theta_XY) + this.centre.x,
+            this.radius * Math.sin(theta_XY) + this.centre.y,
+            this.centre.z
         );
     }
 
@@ -358,7 +312,7 @@ export class Arc {
         return new Local3(Math.sin(theta), -Math.cos(theta), 0).mul(Math.sign(this.dangle));
     }
 
-    static NEtoXY(angle: number) {
+    static NEtoXY(angle: number): number {
         return angle - Math.PI / 2;
     }
 
@@ -387,7 +341,7 @@ export class Arc {
         );
 
         const half_theta_screen = v.scene.cartesianToCanvasCoordinates(half_theta_pos.toCartesian());
-        const centre_screen     = v.scene.cartesianToCanvasCoordinates(this.centre.toCartesian());
+        const centre_screen = v.scene.cartesianToCanvasCoordinates(this.centre.toCartesian());
 
         const norm = new Cartesian2();
         Cartesian2.subtract(half_theta_screen, centre_screen, norm);
@@ -415,7 +369,7 @@ export class Arc {
         ctx.fillStyle = "#ffff0050";
 
         const vertex = (theta: number, side: "Inner" | "Outer", t: number) => {
-            const [x, y] = this.vertex_pos(theta, side, t, v);
+            const [x, y] = this.point_on_region_boundary(theta, side, t, v);
             ctx.lineTo(x, y);
         };
 
@@ -426,7 +380,7 @@ export class Arc {
         const theta1 = ang_mod(this.theta0 + this.dangle);
 
         ctx.beginPath();
-        const [x_start, y_start] = this.vertex_pos(this.theta0, "Outer", 0, v);
+        const [x_start, y_start] = this.point_on_region_boundary(this.theta0, "Outer", 0, v);
         ctx.moveTo(x_start, y_start);
 
         let theta = this.theta0;
@@ -477,35 +431,28 @@ export class Arc {
         ctx.stroke();
     }
 
-    vertex_pos(theta: number, side: "Inner" | "Outer", t: number, viewer: Viewer): [number, number] {
+    point_on_region_boundary(theta: number, side: "Inner" | "Outer", t: number, viewer: Viewer): [number, number] {
         // which side we're on, left or right. 0 or 1
         const f = (side == "Inner" && this.dangle < 0) || (side == "Outer" && this.dangle > 0) ? 0 : 1;
 
-        const rad_now = this.radius + (side == "Inner" ? -1 : 1) * (this.width[0 + f] * (1 - t) + this.width[2 + f] * t);
+        const rad_now =
+            this.radius + (side == "Inner" ? -1 : 1) * (this.width[0 + f] * (1 - t) + this.width[2 + f] * t);
         const local_x = rad_now * Math.cos(Math.PI / 2 - theta) + this.centre.x;
         const local_y = rad_now * Math.sin(Math.PI / 2 - theta) + this.centre.y;
-        const pos = viewer.scene.cartesianToCanvasCoordinates(new Local3(local_x, local_y, this.centre.z).toCartesian());
+        const pos = viewer.scene.cartesianToCanvasCoordinates(
+            new Local3(local_x, local_y, this.centre.z).toCartesian()
+        );
         return [pos.x, pos.y];
-    }
-
-    // TODO benchmark this in the case of top down only
-    vertex_pos_(theta: number, side: "Inner" | "Outer", t: number, p: ArcScreenspaceParams): [number, number] {
-        // which side we're on, left or right. 0 or 1
-        const f = (side == "Inner" && this.dangle < 0) || (side == "Outer" && this.dangle > 0) ? 0 : 1;
-        const rad_now = p.rad + (side == "Inner" ? -1 : 1) * (p.path_width[0 + f] * (1 - t) + p.path_width[2 + f] * t);
-        const x = rad_now * Math.cos(theta) + p.centre.x;
-        const y = rad_now * Math.sin(theta) + p.centre.y;
-        return [x, y];
     }
 
     allowed_region_handle_points(v: Viewer): [Cartesian2, Cartesian2, Cartesian2, Cartesian2] {
         const right = this.dangle > 0 ? "Inner" : "Outer";
         const left = this.dangle > 0 ? "Outer" : "Inner";
         return [
-            Cartesian2.fromArray(this.vertex_pos(this.theta0, left, 0, v)),
-            Cartesian2.fromArray(this.vertex_pos(this.theta0, right, 0, v)),
-            Cartesian2.fromArray(this.vertex_pos(this.theta1(), left, 1, v)),
-            Cartesian2.fromArray(this.vertex_pos(this.theta1(), right, 1, v))
+            Cartesian2.fromArray(this.point_on_region_boundary(this.theta0, left, 0, v)),
+            Cartesian2.fromArray(this.point_on_region_boundary(this.theta0, right, 0, v)),
+            Cartesian2.fromArray(this.point_on_region_boundary(this.theta1(), left, 1, v)),
+            Cartesian2.fromArray(this.point_on_region_boundary(this.theta1(), right, 1, v))
         ];
     }
 
