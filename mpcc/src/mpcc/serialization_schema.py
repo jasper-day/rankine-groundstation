@@ -35,7 +35,7 @@ class Arc(BaseModel):
     arclength: float
 
     def to_dubins(self):
-        print("Creating Dubins Circular segment")
+        # print("Creating Dubins Circular segment")
         assert len(self.centre) == 2
         return CircularSegment(
             centre=np.array(self.centre, np.float64),
@@ -51,7 +51,7 @@ class Line(BaseModel):
     end: list[float]
 
     def to_dubins(self):
-        print("Creating Dubins Line segment")
+        # print("Creating Dubins Line segment")
         assert len(self.start) == 2
         assert len(self.end) == 2
         return LineSegment(
