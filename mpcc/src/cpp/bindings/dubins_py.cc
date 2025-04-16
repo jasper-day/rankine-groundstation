@@ -138,7 +138,8 @@ PYBIND11_MODULE(pydubins, m) {
            [](DubinsPath<T>& self,
               const Eigen::Ref<const Eigen::Vector2d>& pos) {
              return self.get_true_arclength(pos);
-           });
+           })
+      .def("offset_path", &DubinsPath<T>::offset_path);
   // don't bind `to_drake` -- missing pydrake bindings.
 
   py::class_<SolverResult>(m, "SolverResult")

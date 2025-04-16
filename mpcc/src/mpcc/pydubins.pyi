@@ -67,6 +67,8 @@ class DubinsPath:
         "Find the arclength to a given point closest to the estimated arclength"
     def get_true_arclength(self, pos: Vec2):
         "Find the arclength closest to a given point"
+    def offset_path(self, amount: float64) -> DubinsPath:
+        "Return a new path, offset by an amount"
 
 class SolverResult:
     params: ndarray

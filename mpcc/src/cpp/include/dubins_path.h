@@ -102,6 +102,8 @@ class DubinsPath {
 
   T get_true_arclength(drake::Vector2<T> const& pos) const;
 
+  std::unique_ptr<DubinsPath<T>> offset_path(T amount) const;
+
   /// Get types of all parameters
   std::vector<SegmentType> get_types() const {
     std::vector<SegmentType> output;

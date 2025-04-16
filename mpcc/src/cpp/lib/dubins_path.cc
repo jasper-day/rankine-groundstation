@@ -183,6 +183,42 @@ T DubinsPath<T>::get_true_arclength(drake::Vector2<T> const& pos) const {
   return first(0);
 }
 
+template <typename T>
+std::unique_ptr<DubinsPath<T>> DubinsPath<T>::offset_path(T amount) const {
+  auto path_offsetter =
+      [&](std::shared_ptr<Segment<T>> segment) -> std::shared_ptr<Segment<T>> {
+    if (segment->type == SegmentType::LINESEGMENT) {
+      // calculate direction along line segment
+      drake::Vector2<T> AB = segment->end() - segment->start();
+      AB.normalize();
+      drake::Vector2<T> offset;
+      // offset perpendicular to AB direction
+      offset << AB(1) * amount, -AB(0) * amount;
+      // make new segment with offset ends
+      auto new_segment = std::make_shared<LineSegment<T>>(
+          segment->start() + offset, segment->end() + offset);
+      // cast into a Segment
+      return std::dynamic_pointer_cast<Segment<T>>(new_segment);
+    } else if (segment->type == SegmentType::CIRCULARSEGMENT) {
+      // cast into CircularSegment to access protected properties
+      auto csegment = std::dynamic_pointer_cast<CircularSegment<T>>(segment);
+      // new CircularSegment
+      auto new_segment = std::make_shared<CircularSegment<T>>(
+          csegment->centre_, csegment->radius_ + amount * csegment->dir(),
+          csegment->heading_,
+          csegment->arclength_ *
+              (1 + amount * csegment->dir() / csegment->radius_));
+      return std::dynamic_pointer_cast<Segment<T>>(new_segment);
+    } else
+      throw std::runtime_error("Could not determine type of segment");
+  };
+  std::vector<std::shared_ptr<Segment<T>>> new_segments;
+  new_segments.reserve(segments_.size());
+  std::transform(segments_.begin(), segments_.end(),
+                 std::back_inserter(new_segments), path_offsetter);
+  return std::make_unique<DubinsPath<T>>(new_segments);
+}
+
 template DubinsPath<drake::AutoDiffXd>::DubinsPath(const DubinsPath<double>&);
 
 }  // namespace dubins
