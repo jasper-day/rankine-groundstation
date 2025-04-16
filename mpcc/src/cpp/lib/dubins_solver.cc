@@ -68,7 +68,7 @@ drake::VectorX<double> mpcc::dubins::DubinsSolver::solve(
    *
    * x += dx
    *
-   * and iterate until convergence.
+   * This sets the search direction for a line search.
    *
    * @note The least squares convergence guarantees that the update dx is in the
    * row space of A, reducing "surprisal"
@@ -97,12 +97,17 @@ drake::VectorX<double> mpcc::dubins::DubinsSolver::solve(
 
   SparseMatrix<double> A;
   drake::VectorX<double> B(m);
+  drake::VectorX<double> B_new(m);
   drake::VectorX<double> z(m);
   drake::VectorX<double> dx(n);
-  drake::VectorX<double> p_curr(n);
   drake::VectorX<double> p_prev(n);
+  drake::VectorX<double> p_curr(n);
+  drake::VectorX<double> p_new(n);
   Index i;
   Index j;
+  double alpha;
+  int line_search_iter;
+  bool line_search_step;
   bool converged = false;
   int iter = 0;
   DubinsPath<drake::AutoDiffXd> differentiable_path{path};
@@ -160,7 +165,22 @@ drake::VectorX<double> mpcc::dubins::DubinsSolver::solve(
     dx = -A.transpose() * z;
 
     p_prev = p_curr;
-    p_curr += dx;
+    // Line search
+    alpha = 1.0;
+    line_search_step = false;
+    for (line_search_iter = 0; line_search_iter < 10; ++line_search_iter) {
+      p_new = p_curr + alpha * dx;
+      B_new = path.get_constraint_residuals(p_new);
+      if (B_new.pow(2).sum() < B.pow(2).sum()) {
+        line_search_step = true;
+        p_curr = p_new;
+        break;
+      }
+      alpha *= 0.5;
+    }
+    if (!line_search_step) {
+      p_curr += dx * alpha;
+    }
 
     // Check for convergence
     // All constraint values should be zero
