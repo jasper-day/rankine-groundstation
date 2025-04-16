@@ -33,8 +33,19 @@ params_1: float[4],
 
 from acados_template import AcadosModel
 from typing import Literal
-from fdm2d import export_fdm_2d
-from casadi import SX, vertcat, if_else, dot, norm_2, fabs, atan2, fmod
+from casadi import (
+    SX,
+    vertcat,
+    if_else,
+    dot,
+    norm_2,
+    fabs,
+    atan2,
+    fmod,
+    remainder,
+    sin,
+    cos,
+)
 import numpy as np
 import scipy.linalg
 
@@ -92,16 +103,24 @@ def export_cc_controller(
     line_b = vertcat(active_params[2], active_params[3])
     circ_c = vertcat(active_params[0], active_params[1])
     circ_xc = pos - circ_c
+    circ_r = active_params[2]
+    line_ba = line_b - line_a
+    line_ba_n = line_ba / norm_2(line_ba)
+    line_posa = pos - line_a
+    x1 = active_params[0]
+    y1 = active_params[1]
+    x2 = active_params[2]
+    y2 = active_params[3]
 
     # arclength progress
     ds = if_else(
-        active_type > 0,
+        active_type > 0.5,
         # corresponds to circular segment
         active_params[2]
         * dot(dpos, vertcat(-circ_xc[1], circ_xc[0]))  # BR
         / norm_2(circ_xc) ** 2,
         # corresponds to line segment
-        dot(dpos, line_b - line_a) / norm_2(line_b - line_a),
+        dot(dpos, line_ba_n),
     )
 
     ny = 5
@@ -110,46 +129,54 @@ def export_cc_controller(
     y_e = SX.sym("y", ny_e)
 
     # contouring error
-    line_ba = line_b - line_a
+
     e_c = if_else(
-        active_type > 0,
+        active_type > 0.5,
         # circle
-        (1 - fabs(active_params[2]) / norm_2(circ_xc)) * circ_xc,
+        # norm_2((1 - fabs(active_params[2]) / norm_2(circ_xc)) * circ_xc),
+        # equal to
+        norm_2(circ_xc) - fabs(circ_r),
         # line
-        (pos - line_a)
-        - (line_ba)
-        * dot(pos - line_a, line_ba)  # BR
-        / norm_2(line_ba),
+        # norm_2(line_posa - line_ba_n * dot(line_ba_n, line_posa)),
+        # https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line
+        # seems better able to cope with numerical sensitivity
+        ((y2 - y1) * north - (x2 - x1) * east + x2 * y1 - y2 * x1) / norm_2(line_ba),
     )
 
+    # heading
     chi = atan2(dpos[1], dpos[0])
 
+    # path heading
     chi_d = if_else(
-        active_type > 0,
+        active_type > 0.5,
         # circle
         if_else(
-            active_params[2] > 0,
-            # travel from north to east
-            atan2(pos[0], -pos[1]),
-            # travel from east to north
-            atan2(-pos[0], pos[1]),
+            circ_r > 0,
+            atan2(circ_xc[0], -circ_xc[1]),
+            atan2(-circ_xc[0], circ_xc[1]),
         ),
         # line
         atan2(line_ba[1], line_ba[0]),
     )
     # wrap to between +- np.pi
-    e_chi = fmod(chi - chi_d + np.pi, 2 * np.pi) - np.pi
+    # e_chi = (sin(chi) - sin(chi_d)) ** 2 + (cos(chi) - cos(chi_d)) ** 2
+    # e_chi_normalized = remainder(e_chi, 2 * np.pi)
+    # e_chi = chi - chi_d
+
+    # Compute heading error directly in sine/cosine space
+    # e_chi = (chi_cos - chi_d_cos) ** 2 + (chi_sin - chi_d_sin) ** 2
+    e_chi = remainder(chi - chi_d, 2 * np.pi)
 
     # lagrange cost measurements
     y[0] = e_chi if controller_type == "pt" else -ds * rho
-    y[1] = norm_2(e_c)
+    y[1] = e_c
     y[2] = phi
     y[3] = dphi
     y[4] = u  # control slew rate
     # mayer cost measurements
     # y_e[0] does not get used at all for EMPCC
     y_e[0] = e_chi if controller_type == "pt" else 0
-    y_e[1] = norm_2(e_c)
+    y_e[1] = e_c
     y_e[2] = phi
     y_e[3] = dphi
 
@@ -179,10 +206,17 @@ def export_cc_controller(
     cost_W_e = Q
 
     if controller_type == "pt":
+        print("Cost function for Path Tracking controller")
         model.cost_psi_expr = 0.5 * (r.T @ cost_W @ r)
         model.cost_psi_expr_e = 0.5 * (r_e.T @ cost_W_e @ r_e)
     elif controller_type == "empcc":
+        print("Cost function for EMPCC controller")
         model.cost_psi_expr = 0.5 * (r[1:].T @ cost_W @ r[1:]) + r[0]
         model.cost_psi_expr_e = 0.5 * (r_e[1:].T @ cost_W_e @ r_e[1:])
+
+    # Constraints
+    # constrain normal distance
+    model.con_h_expr = e_c
+    model.con_h_expr_e = e_c
 
     return model

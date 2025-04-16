@@ -3,22 +3,19 @@ from fdm2d import export_fdm_2d
 import numpy as np
 from cc_controller import export_cc_controller
 
-Q = np.diag(
-    [
-        # 1,  # e_chi
-        0.1,  # e_c
-        0.01,  # phi
-        0.1,  # dphi
-    ]
-)
-R = np.diag(
-    [
-        100  # u
-    ]
-)
 
-
-def setup_model(x0, phi_max, N_horizon, Tf, RTI=True):
+def setup_model(
+    x0,
+    phi_max,
+    N_horizon,
+    Tf,
+    starting_params,
+    Q,
+    R,
+    rho,
+    RTI=True,
+    controller_type="pt",
+):
     ocp = AcadosOcp(
         acados_path="/home/jasper/rankine-groundstation/mpcc/external/acados"
     )
@@ -27,7 +24,9 @@ def setup_model(x0, phi_max, N_horizon, Tf, RTI=True):
     zeta = 0.8  # damping ratio of roll transfer function
     fdm_model = export_fdm_2d(b0=omega**2, a0=omega**2, a1=2 * zeta * omega)
     # path tracking controller for now
-    model = export_cc_controller(fdm_model, "empcc", Q=Q, R=R, rho=10)
+    model = export_cc_controller(
+        model=fdm_model, controller_type=controller_type, Q=Q, R=R, rho=rho
+    )
     # nx = model.x.rows()
     # nu = model.u.rows()
     # num_p = model.p.rows()
@@ -42,33 +41,36 @@ def setup_model(x0, phi_max, N_horizon, Tf, RTI=True):
     ocp.cost.yref = np.zeros((ny,))
     ocp.cost.yref_e = np.zeros((ny_e,))
 
-    # TODO: set constraints
-
     ocp.constraints.x0 = x0
 
     ocp.constraints.lbx = np.array([-phi_max])
     ocp.constraints.ubx = np.array([phi_max])
     ocp.constraints.idxbx = np.array([5])
 
+    # cross-wise constraints (will want to be set as a "safety tunnel")
+    ocp.constraints.lh = np.array([-20])
+    ocp.constraints.uh = np.array([20])
+    ocp.constraints.lh_e = np.array([-20])
+    ocp.constraints.uh_e = np.array([20])
+
+    # add slacks
+    ocp.constraints.idxsh = np.array([0])
+    ocp.constraints.idxsh_e = np.array([0])
+
+    Z = np.diag([100])
+    z = np.array([0])
+
+    ocp.cost.Zl = Z
+    ocp.cost.Zu = Z
+    ocp.cost.Zl_e = Z
+    ocp.cost.Zu_e = Z
+    ocp.cost.zl = z
+    ocp.cost.zu = z
+    ocp.cost.zl_e = z
+    ocp.cost.zu_e = z
+
     # TODO: set parameter values automatically from Dubins path
-    ocp.parameter_values = np.array(
-        [
-            0,  # w_n
-            0,  # w_e
-            14,  # v_A
-            1,  # circular segment
-            0,  # c_n
-            0,  # c_e
-            -60,  # radius
-            0,  # unused
-            50 * 2 * np.pi,  # s_sw, go around circle once
-            1,  # circular segment
-            0,  # c_n
-            0,  # c_e
-            60,  # go in the other direction
-            0,  # unused
-        ]
-    )
+    ocp.parameter_values = starting_params
 
     # set prediction horizon
     ocp.solver_options.N_horizon = N_horizon

@@ -15,7 +15,10 @@ def plot_fdm(
     x: np.ndarray,
     x_labels: list[str],
     u_labels: list[str],
+    costs: np.ndarray,
+    params: np.ndarray,
     path: Optional[DubinsPath] = None,
+    offset: float = 20,
     gs: Optional[gridspec.GridSpec] = None,
     time_label="$t$",
     latexify=True,
@@ -39,7 +42,8 @@ def plot_fdm(
     if frame != -1:
         t = t[: frame + 1]
         x = x[: frame + 1, :]
-        u = u[: frame + 1, :]
+        u = u[:frame, :]
+        costs = costs[:frame]
 
     nx = x.shape[1]
     assert nx == 7
@@ -63,13 +67,16 @@ def plot_fdm(
         plt.axhline(-phi_max_deg, t[0], t[-1], color="C0", linestyle="--")
     plt.plot(t, phi_deg, color=color, label=r"$\phi$")
     plt.plot(t, phi_ref_deg, color=color, label=r"$\phi_\text{ref}$", linestyle=":")
+    plt.xlabel(time_label)
     if plot_legend:
         plt.legend(loc="right")
     plt.grid()
 
     plt.subplot(gs[1])
-    plt.plot(t, xi_deg, color=color, label=r"$\xi$ [deg]")
-    plt.xlabel(time_label)
+    try:
+        plt.plot(t[1:], costs, color=color, label=r"Costs")
+    except ValueError as e:
+        print(str(e))
     if plot_legend:
         plt.legend(loc="right")
     plt.grid()
@@ -85,9 +92,29 @@ def plot_fdm(
         if plot_legend:
             plt.plot(cth, sth, color="C0", linestyle="--")
     else:
-        th = np.linspace(0, path.length(), 500)
-        locs = np.array([path.eval(t) for t in th])
-        plt.plot(locs[:, 1], locs[:, 0], color="C0", linestyle="--")  # east then north
+        if frame != -1:
+            th = np.linspace(0, x[-1, -1], 500)
+        else:
+            th = np.linspace(0, path.length(), 500)
+        locs = np.array([path.eval(s) for s in th])
+        # plot offsets
+        offset_paths = [path.offset_path(offset), path.offset_path(-offset)]
+        for o_path in offset_paths:
+            o_th = np.linspace(0, o_path.length(), 500)
+            o_locs = np.array([o_path.eval(s) for s in o_th])
+            plt.plot(o_locs[:, 1], o_locs[:, 0], color="gray", linestyle=":")
+
+        plt.plot(
+            locs[:, 1], locs[:, 0], color="gray", linestyle="--"
+        )  # east then north
+        if frame != -1:
+            # plot contouring error
+            plt.plot(
+                [locs[-1, 1], east[-1]],
+                [locs[-1, 0], north[-1]],
+                linestyle=":",
+                color="C0",
+            )
     plt.plot(east, north, color=color, label=r"$x$", linestyle=linestyle)
     plt.scatter(east[0], north[0], marker="^", c="C1")
     plt.scatter(east[-1], north[-1], marker="s", c="C1")
