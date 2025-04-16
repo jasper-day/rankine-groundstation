@@ -97,6 +97,11 @@ class DubinsPath {
   /// Get value of all parameters
   drake::VectorX<T> get_params() const;
 
+  T get_closest_arclength(drake::Vector2<T> const& pos,
+                          T const& estimated_arclength) const;
+
+  T get_true_arclength(drake::Vector2<T> const& pos) const;
+
   /// Get types of all parameters
   std::vector<SegmentType> get_types() const {
     std::vector<SegmentType> output;

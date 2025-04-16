@@ -63,6 +63,10 @@ class DubinsPath:
     def n_params(self) -> int: ...
     def n_constraints(self) -> int: ...
     def get_types(self) -> list[SegmentType]: ...
+    def get_closest_arclength(self, pos: Vec2, estimated_arclength: float64):
+        "Find the arclength to a given point closest to the estimated arclength"
+    def get_true_arclength(self, pos: Vec2):
+        "Find the arclength closest to a given point"
 
 class SolverResult:
     params: ndarray

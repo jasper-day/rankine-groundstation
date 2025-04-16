@@ -25,7 +25,8 @@ class Segment {
 
   /// Path-relative coordinates of a point in NED coordinates
   /// The first coordinate is the arclength and the second is normal distance
-  virtual drake::Vector2<T> path_coords(drake::Vector2<T> point) const = 0;
+  virtual drake::Vector2<T> path_coords(
+      drake::Vector2<T> const& point) const = 0;
 
   /// The length of the segment
   virtual T length() const = 0;
@@ -92,7 +93,7 @@ class LineSegment final : public Segment<T> {
     this->type = SegmentType::LINESEGMENT;
   }
 
-  drake::Vector2<T> path_coords(drake::Vector2<T> point) const override;
+  drake::Vector2<T> path_coords(drake::Vector2<T> const& point) const override;
   T length() const override;
   drake::Vector2<T> start() const override { return start_; }
   drake::Vector2<T> end() const override { return end_; }
@@ -171,7 +172,7 @@ class CircularSegment final : public Segment<T> {
     this->type = SegmentType::CIRCULARSEGMENT;
   }
 
-  drake::Vector2<T> path_coords(drake::Vector2<T> point) const override;
+  drake::Vector2<T> path_coords(drake::Vector2<T> const& point) const override;
   T length() const override {
     using std::abs;
     return abs(arclength_);

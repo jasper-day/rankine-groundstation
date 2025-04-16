@@ -142,6 +142,47 @@ drake::VectorX<T> DubinsPath<T>::get_constraint_residuals(
   return output;
 }
 
+template <typename T>
+T DubinsPath<T>::get_closest_arclength(drake::Vector2<T> const& pos,
+                                       T const& estimated_arclength) const {
+  std::vector<T> arclengths;
+  arclengths.reserve(segments_.size());
+  std::transform(segments_.begin(), segments_.end(),
+                 std::back_inserter(arclengths),
+                 [&](std::shared_ptr<Segment<T>> const& segment) {
+                   drake::Vector2<T> result;
+                   result = segment->path_coords(pos);
+                   return result(0);
+                 });
+  using std::abs;
+  // find closest to estimated_arclength
+  std::partial_sort(arclengths.begin(), arclengths.begin() + 2,
+                    arclengths.end(), [&](T a, T b) {
+                      return abs(a - estimated_arclength) <
+                             abs(b - estimated_arclength);
+                    });
+  return arclengths.at(0);
+}
+
+template <typename T>
+T DubinsPath<T>::get_true_arclength(drake::Vector2<T> const& pos) const {
+  std::vector<drake::Vector2<T>> coords;
+  coords.reserve(segments_.size());
+  std::transform(segments_.begin(), segments_.end(), std::back_inserter(coords),
+                 [&](std::shared_ptr<Segment<T>> const& segment) {
+                   drake::Vector2<T> result;
+                   result = segment->path_coords(pos);
+                   return result;
+                 });
+  using std::abs;
+  // find least normal distance
+  std::partial_sort(
+      coords.begin(), coords.begin() + 2, coords.end(),
+      [](drake::Vector2<T> a, drake::Vector2<T> b) { return a(1) < b(1); });
+  drake::Vector2<T> first = coords.at(0);
+  return first(0);
+}
+
 template DubinsPath<drake::AutoDiffXd>::DubinsPath(const DubinsPath<double>&);
 
 }  // namespace dubins

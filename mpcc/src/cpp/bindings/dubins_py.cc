@@ -47,7 +47,11 @@ PYBIND11_MODULE(pydubins, m) {
                                                      drake::Vector2<T>(end));
            }),
            py::arg("start"), py::arg("end"))
-      .def("path_coords", &LineSegment<T>::path_coords)
+      .def("path_coords",
+           [](LineSegment<T>& self,
+              const Eigen::Ref<const Eigen::Vector2d>& point) {
+             return self.path_coords(point);
+           })
       .def("length", &LineSegment<T>::length)
       .def("start", &LineSegment<T>::start)
       .def("end", &LineSegment<T>::end)
@@ -68,7 +72,11 @@ PYBIND11_MODULE(pydubins, m) {
            }),
            py::arg("centre"), py::arg("radius"), py::arg("heading"),
            py::arg("arclength"))
-      .def("path_coords", &CircularSegment<T>::path_coords)
+      .def("path_coords",
+           [](CircularSegment<T>& self,
+              const Eigen::Ref<const Eigen::Vector2d>& point) {
+             return self.path_coords(point);
+           })
       .def("length", &CircularSegment<T>::length)
       .def("start", &CircularSegment<T>::start)
       .def("end", &CircularSegment<T>::end)
@@ -120,7 +128,17 @@ PYBIND11_MODULE(pydubins, m) {
            })
       .def("n_params", &DubinsPath<T>::n_params)
       .def("n_constraints", &DubinsPath<T>::n_constraints)
-      .def("get_types", &DubinsPath<T>::get_types);
+      .def("get_types", &DubinsPath<T>::get_types)
+      .def("get_closest_arclength",
+           [](DubinsPath<T>& self, const Eigen::Ref<const Eigen::Vector2d>& pos,
+              T const& estimated_arclength) {
+             return self.get_closest_arclength(pos, estimated_arclength);
+           })
+      .def("get_true_arclength",
+           [](DubinsPath<T>& self,
+              const Eigen::Ref<const Eigen::Vector2d>& pos) {
+             return self.get_true_arclength(pos);
+           });
   // don't bind `to_drake` -- missing pydrake bindings.
 
   py::class_<SolverResult>(m, "SolverResult")

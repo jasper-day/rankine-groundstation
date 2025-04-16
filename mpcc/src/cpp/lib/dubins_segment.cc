@@ -43,12 +43,13 @@ drake::Vector2<T> LineSegment<T>::eval(T arclength) const {
 }
 
 template <typename T>
-drake::Vector2<T> LineSegment<T>::path_coords(drake::Vector2<T> point) const {
+drake::Vector2<T> LineSegment<T>::path_coords(
+    drake::Vector2<T> const& point) const {
   drake::Vector2<T> to_point = point - start();
   drake::Vector2<T> to_end = end() - start();
   T length = to_end.norm();
-  T arclength = to_point.dot(to_end);
-  T normal_dist = (to_point - arclength * to_end / length).norm();
+  T arclength = to_point.dot(to_end) / length;
+  T normal_dist = (to_point - to_end * arclength / length).norm();
   using std::clamp;
   arclength = clamp(arclength, T(0), length);
   return drake::Vector2<T>(arclength, normal_dist);
@@ -80,7 +81,7 @@ drake::Vector2<T> CircularSegment<T>::eval(T arclength) const {
 
 template <typename T>
 drake::Vector2<T> CircularSegment<T>::path_coords(
-    drake::Vector2<T> point) const {
+    drake::Vector2<T> const& point) const {
   // this implementation is incorrect, because we can go around the
   // circle multiple times. We have effectively added a branch cut and are not
   // tracking winding number. In a system, the distance can only increase, and
@@ -88,7 +89,8 @@ drake::Vector2<T> CircularSegment<T>::path_coords(
   drake::Vector2<T> to_point = point - centre_;
   T dist = to_point.norm();
   using std::atan2;
-  T angle = atan2(to_point.y(), to_point.x()) - heading_;
+  // extra double wrong because atan in [-pi, pi] -- ffs
+  T angle = (atan2(to_point.y(), to_point.x()) - heading_);
   T arclength = angle * radius_;
   using std::clamp;
   arclength = clamp(arclength, T(0), arclength_);
