@@ -62,11 +62,13 @@ class DubinsPath:
     def n_constraints(self) -> int: ...
     def get_types(self) -> list[SegmentType]: ...
 
+class SolverResult:
+    params: ndarray
+    converged: bool
+
 class DubinsSolver:
     def __init__(self, tolerance: float, max_iter: int, debug: int): ...
-    def solve(
-        self, path: DubinsPath, dragged_points: List[bool]
-    ) -> ndarray[float64, Any]:
+    def solve(self, path: DubinsPath, dragged_points: List[bool]) -> SolverResult:
         """Find a suitable configuration of a Dubins path.
         dragged_points currently not implemented
         """

@@ -8,6 +8,11 @@
 namespace mpcc {
 namespace dubins {
 
+struct SolverResult {
+  drake::VectorX<double> const params;
+  bool const converged;
+};
+
 class DubinsSolver {
  public:
   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(DubinsSolver);
@@ -31,8 +36,8 @@ class DubinsSolver {
    * @returns A converged set of path parameters
    * @throws std::runtime_error for invalid configurations
    */
-  drake::VectorX<double> solve(DubinsPath<double>& path,
-                               const std::vector<bool>& dragged_points);
+  SolverResult solve(DubinsPath<double>& path,
+                     const std::vector<bool>& dragged_points);
 
   /**
    * @brief get the gradient of the constraint with respect to the parameters

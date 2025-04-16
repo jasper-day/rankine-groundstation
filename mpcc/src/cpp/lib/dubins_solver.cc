@@ -32,7 +32,7 @@ Eigen::MatrixXd mpcc::dubins::DubinsSolver::jac(DubinsPath<double>& path,
   return drake::math::ExtractGradient(jac);
 }
 
-drake::VectorX<double> mpcc::dubins::DubinsSolver::solve(
+mpcc::dubins::SolverResult mpcc::dubins::DubinsSolver::solve(
     mpcc::dubins::DubinsPath<double>& path,
     const std::vector<bool>& dragged_points) {
   /* Based on the solver from SolveSpace.
@@ -171,7 +171,7 @@ drake::VectorX<double> mpcc::dubins::DubinsSolver::solve(
     for (line_search_iter = 0; line_search_iter < 10; ++line_search_iter) {
       p_new = p_curr + alpha * dx;
       B_new = path.get_constraint_residuals(p_new);
-      if (B_new.pow(2).sum() < B.pow(2).sum()) {
+      if (B_new.array().pow(2).sum() < B.array().pow(2).sum()) {
         line_search_step = true;
         p_curr = p_new;
         break;
@@ -203,17 +203,17 @@ drake::VectorX<double> mpcc::dubins::DubinsSolver::solve(
       iter++ < max_iter_ && !converged);
   // NEWTON ITERATION LOOP END
 
-  if (!converged) {
-    std::stringstream ss;
-    ss << "Could not converge configuration after " << iter << " iterations.\n";
-    ss << "Final constraint residuals:\n";
-    ss << B << "\n";
-    ss << "Final parameter values:\n";
-    ss << p_curr << "\n";
-    ss << "Parameter changes in last iteration:\n";
-    ss << dx << "\n";
-    throw std::runtime_error(ss.str());
-  }
+  // if (!converged) {
+  //   std::stringstream ss;
+  //   ss << "Could not converge configuration after " << iter << "
+  //   iterations.\n"; ss << "Final constraint residuals:\n"; ss << B << "\n";
+  //   ss << "Final parameter values:\n";
+  //   ss << p_curr << "\n";
+  //   ss << "Parameter changes in last iteration:\n";
+  //   ss << dx << "\n";
+  //   throw std::runtime_error(ss.str());
+  // }
 
-  return p_curr;
+  SolverResult result{p_curr, converged};
+  return result;
 }

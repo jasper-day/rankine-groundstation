@@ -123,6 +123,10 @@ PYBIND11_MODULE(pydubins, m) {
       .def("get_types", &DubinsPath<T>::get_types);
   // don't bind `to_drake` -- missing pydrake bindings.
 
+  py::class_<SolverResult>(m, "SolverResult")
+      .def_readonly("params", &SolverResult::params)
+      .def_readonly("converged", &SolverResult::converged);
+
   py::class_<DubinsSolver>(m, "DubinsSolver")
       .def(py::init<>())
       .def(py::init<double, int, int>(), py::arg("tolerance"),
