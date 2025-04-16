@@ -17,9 +17,12 @@ class DubinsSolver {
  public:
   DRAKE_NO_COPY_NO_MOVE_NO_ASSIGN(DubinsSolver);
 
-  DubinsSolver() : DubinsSolver(1e-6, 50, 0) {};
-  DubinsSolver(double tolerance, int max_iter, int debug)
-      : tolerance_(tolerance), max_iter_(max_iter), debug_(debug) {};
+  DubinsSolver() : DubinsSolver(1e-6, 50, 0, true) {};
+  DubinsSolver(double tolerance, int max_iter, int debug, bool line_search)
+      : tolerance_(tolerance),
+        max_iter_(max_iter),
+        debug_(debug),
+        line_search_(line_search) {};
   ~DubinsSolver() = default;
 
   /**
@@ -45,6 +48,7 @@ class DubinsSolver {
   Eigen::MatrixXd jac(DubinsPath<double>& path, drake::VectorX<double> params);
 
  protected:
+  bool line_search_;
   double tolerance_;
   int max_iter_;
   int debug_;

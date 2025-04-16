@@ -166,20 +166,24 @@ mpcc::dubins::SolverResult mpcc::dubins::DubinsSolver::solve(
 
     p_prev = p_curr;
     // Line search
-    alpha = 1.0;
-    line_search_step = false;
-    for (line_search_iter = 0; line_search_iter < 10; ++line_search_iter) {
-      p_new = p_curr + alpha * dx;
-      B_new = path.get_constraint_residuals(p_new);
-      if (B_new.array().pow(2).sum() < B.array().pow(2).sum()) {
-        line_search_step = true;
-        p_curr = p_new;
-        break;
+    if (line_search_) {
+      alpha = 1.0;
+      line_search_step = false;
+      for (line_search_iter = 0; line_search_iter < 10; ++line_search_iter) {
+        p_new = p_curr + alpha * dx;
+        B_new = path.get_constraint_residuals(p_new);
+        if (B_new.array().pow(2).sum() < B.array().pow(2).sum()) {
+          line_search_step = true;
+          p_curr = p_new;
+          break;
+        }
+        alpha *= 0.5;
       }
-      alpha *= 0.5;
-    }
-    if (!line_search_step) {
-      p_curr += dx * alpha;
+      if (!line_search_step) {
+        p_curr += dx * alpha;
+      }
+    } else {
+      p_curr += dx;
     }
 
     // Check for convergence

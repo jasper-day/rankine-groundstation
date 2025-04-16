@@ -67,7 +67,9 @@ class SolverResult:
     converged: bool
 
 class DubinsSolver:
-    def __init__(self, tolerance: float, max_iter: int, debug: int): ...
+    def __init__(
+        self, tolerance: float, max_iter: int, debug: int, line_search: bool
+    ): ...
     def solve(self, path: DubinsPath, dragged_points: List[bool]) -> SolverResult:
         """Find a suitable configuration of a Dubins path.
         dragged_points currently not implemented

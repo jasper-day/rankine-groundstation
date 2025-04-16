@@ -129,8 +129,8 @@ PYBIND11_MODULE(pydubins, m) {
 
   py::class_<DubinsSolver>(m, "DubinsSolver")
       .def(py::init<>())
-      .def(py::init<double, int, int>(), py::arg("tolerance"),
-           py::arg("max_iter"), py::arg("debug"))
+      .def(py::init<double, int, int, bool>(), py::arg("tolerance"),
+           py::arg("max_iter"), py::arg("debug"), py::arg("line_search"))
       .def("solve", &DubinsSolver::solve)
       .def("jac", [](DubinsSolver& self, DubinsPath<T>& path,
                      Eigen::Ref<const Eigen::VectorXd> const& params) {
