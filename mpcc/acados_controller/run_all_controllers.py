@@ -46,7 +46,7 @@ def run_computational_controllers():
         for controller in controllers:
             print("Running", controller, "with", extra_config)
             main(
-                path="paths/twisty_test_path",
+                path="paths/twisty_test_path.json",
                 controller=controller,
                 plot=True,
                 extra_options=extra_config,
