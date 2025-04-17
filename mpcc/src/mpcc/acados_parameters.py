@@ -50,8 +50,9 @@ def get_acados_segment_parameters(segment: Segment) -> np.ndarray[(5,), np.float
         parameters[0] = 1.0
         parameters[1] = segment_p[0]  # center_n
         parameters[2] = segment_p[1]  # center_e
-        parameters[3] = segment_p[2] * np.sign(segment_p[4])  # signed radius
-        # parameters[4] is unused
+        parameters[3] = segment_p[2]  # radius
+        parameters[4] = np.sign(segment_p[4])  # direction of travel
+
     else:
         parameters[1:] = segment_p  # start_x, start_y, end_x, end_y
     return parameters

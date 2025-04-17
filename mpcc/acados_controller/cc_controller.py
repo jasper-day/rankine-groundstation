@@ -88,19 +88,22 @@ def export_cc_controller(
     circ_c = vertcat(active_params[0], active_params[1])
     circ_xc = pos - circ_c
     circ_r = active_params[2]
+    circ_dir = active_params[3]
     line_ba = line_b - line_a
-    line_ba_n = line_ba / norm_2(line_ba)
+    line_T_n = line_ba / norm_2(line_ba)
+    line_N_n = vertcat(-line_T_n[1], line_T_n[0])
     line_posa = pos - line_a
 
     # arclength progress
     ds = if_else(
         active_type > 0.5,
         # corresponds to circular segment
-        active_params[2]
+        circ_r
+        * circ_dir
         * dot(dpos, vertcat(-circ_xc[1], circ_xc[0]))  # BR
         / norm_2(circ_xc) ** 2,
         # corresponds to line segment
-        dot(dpos, line_ba_n),
+        dot(dpos, line_T_n),
     )
 
     # contouring error
@@ -121,7 +124,7 @@ def export_cc_controller(
         active_type > 0.5,
         # circle
         if_else(
-            circ_r > 0,
+            circ_dir > 0,
             atan2(circ_xc[0], -circ_xc[1]),
             atan2(-circ_xc[0], circ_xc[1]),
         ),
