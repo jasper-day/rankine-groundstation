@@ -65,7 +65,7 @@ phi_max_deg = 30.0
 
 [constraints.path]
 # cross-path constraints
-lh = [-10.0]
+lh = [-25.0]
 uh = [20.0]
 lh_e = [-0.0]
 uh_e = [0.0]
@@ -78,9 +78,9 @@ z = [200.0]
 
 [simulation.defaults]
 
-Tf = 10.1
-N_horizon = 100
-Nsim = 2000
+Tf = 6.1
+N_horizon = 60
+Nsim = 3800
 
 [rti]
 

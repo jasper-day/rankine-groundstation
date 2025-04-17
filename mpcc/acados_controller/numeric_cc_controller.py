@@ -7,7 +7,6 @@ import numpy as np
 from numpy import sin, cos, tan, dot, atan2
 from math import remainder
 from numpy.linalg import norm as norm_2
-from numpy import abs as fabs
 from mpcc.serialization_schema import path_adapter, to_dubins
 import matplotlib.pyplot as plt
 import typer
@@ -42,10 +41,6 @@ def calc(x, u, p, g: float, b0: float, a0: float, a1: float):
     line_T_n = line_ba / norm_2(line_ba)
     line_N_n = np.array([-line_T_n[1], line_T_n[0]])
     line_posa = pos - line_a
-    x1 = active_params[0]
-    y1 = active_params[1]
-    x2 = active_params[2]
-    y2 = active_params[3]
 
     dnorth = v_A * cos(xi) + w_n
     deast = v_A * sin(xi) + w_e
@@ -62,14 +57,9 @@ def calc(x, u, p, g: float, b0: float, a0: float, a1: float):
 
     e_c = (  # contouring error
         # circle
-        # norm_2((1 - fabs(active_params[2]) / norm_2(circ_xc)) * circ_xc),
-        # equal to
         circ_dir * (norm_2(circ_xc) - circ_r)
         if active_type > 0.5
         # line
-        # norm_2(line_posa - line_ba_n * dot(line_ba_n, line_posa)),
-        # https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line
-        # seems better able to cope with numerical sensitivity
         else dot(line_posa, line_N_n)
     )
 

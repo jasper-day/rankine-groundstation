@@ -8,6 +8,70 @@ from mpcc.pydubins import DubinsPath, SegmentType
 from path_utils import get_spline_numeric
 
 
+def plot_path(
+    frame,
+    path: DubinsPath,
+    path_constraints: dict,
+    north,
+    east,
+    plot_legend: bool,
+    x,
+    color,
+    linestyle,
+):
+    plt.gca().set_aspect("equal")
+    if frame != -1:
+        # plot path up to location
+        th = np.linspace(0, x[-1, -1], 500)
+    else:
+        th = np.linspace(0, path.length(), 500)
+    locs = np.array([path.eval(s) for s in th])
+    # plot offsets
+    offset_lower = path_constraints["lh"][0]
+    offset_upper = path_constraints["uh"][0]
+    offset_paths = [path.offset_path(offset_lower), path.offset_path(offset_upper)]
+    for o_path in offset_paths:
+        o_th = np.linspace(0, o_path.length(), 500)
+        o_locs = np.array([o_path.eval(s) for s in o_th])
+        plt.plot(o_locs[:, 1], o_locs[:, 0], color="gray", linestyle=":")
+
+    # plot centers
+    p_types = iter(path.get_types())
+
+    p_params = path.get_params()
+    i = 0
+    while i < p_params.shape[0]:
+        p_type = next(p_types)
+        if p_type == SegmentType.LINESEGMENT:
+            i += 4
+        elif p_type == SegmentType.CIRCULARSEGMENT:
+            plt.scatter(p_params[i + 1], p_params[i], color="gray")
+            i += 5
+        else:
+            raise Exception(p_type)
+
+    plt.plot(locs[:, 1], locs[:, 0], color="gray", linestyle="--")  # east then north
+    if frame != -1:
+        # plot contouring error
+        plt.plot(
+            [locs[-1, 1], east[-1]],
+            [locs[-1, 0], north[-1]],
+            linestyle=":",
+            color="C0",
+        )
+    plt.plot(east, north, color=color, label=r"$x$", linestyle=linestyle)
+    plt.scatter(east[0], north[0], marker="^", c="C1")
+    plt.scatter(east[-1], north[-1], marker="s", c="C1")
+    plt.annotate("Start", xy=(east[0], north[0]))
+    if frame == -1:
+        plt.annotate("End", xy=(east[-1], north[-1]))
+    if plot_legend:
+        plt.legend()
+        plt.xlabel("Easting [m]")
+        plt.ylabel("Northing [m]")
+    plt.grid()
+
+
 def plot_fdm(
     frame: int,
     t: np.ndarray,
@@ -86,59 +150,10 @@ def plot_fdm(
     plt.grid()
 
     plt.subplot(gs[2])
-    plt.gca().set_aspect("equal")
-    th = np.linspace(0, 2 * np.pi, 1000, endpoint=True)
 
-    if frame != -1:
-        # plot path up to location
-        th = np.linspace(0, x[-1, -1], 500)
-    else:
-        th = np.linspace(0, path.length(), 500)
-    locs = np.array([path.eval(s) for s in th])
-    # plot offsets
-    offset_lower = path_constraints["lh"][0]
-    offset_upper = path_constraints["uh"][0]
-    offset_paths = [path.offset_path(offset_lower), path.offset_path(offset_upper)]
-    for o_path in offset_paths:
-        o_th = np.linspace(0, o_path.length(), 500)
-        o_locs = np.array([o_path.eval(s) for s in o_th])
-        plt.plot(o_locs[:, 1], o_locs[:, 0], color="gray", linestyle=":")
-
-    # plot centers
-    p_types = iter(path.get_types())
-
-    p_params = path.get_params()
-    i = 0
-    while i < p_params.shape[0]:
-        p_type = next(p_types)
-        if p_type == SegmentType.LINESEGMENT:
-            i += 4
-        elif p_type == SegmentType.CIRCULARSEGMENT:
-            plt.scatter(p_params[i + 1], p_params[i], color="gray")
-            i += 5
-        else:
-            raise Exception(p_type)
-
-    plt.plot(locs[:, 1], locs[:, 0], color="gray", linestyle="--")  # east then north
-    if frame != -1:
-        # plot contouring error
-        plt.plot(
-            [locs[-1, 1], east[-1]],
-            [locs[-1, 0], north[-1]],
-            linestyle=":",
-            color="C0",
-        )
-    plt.plot(east, north, color=color, label=r"$x$", linestyle=linestyle)
-    plt.scatter(east[0], north[0], marker="^", c="C1")
-    plt.scatter(east[-1], north[-1], marker="s", c="C1")
-    plt.annotate("Start", xy=(east[0], north[0]))
-    if frame == -1:
-        plt.annotate("End", xy=(east[-1], north[-1]))
-    if plot_legend:
-        plt.legend()
-        plt.xlabel("Easting [m]")
-        plt.ylabel("Northing [m]")
-    plt.grid()
+    plot_path(
+        frame, path, path_constraints, north, east, plot_legend, x, color, linestyle
+    )
     # plt.tight_layout()
     return gs
 

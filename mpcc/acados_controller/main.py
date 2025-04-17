@@ -22,6 +22,7 @@ def main(
     write: bool = True,
     animate: bool = False,
     plot: bool = False,
+    extra_options=None,
 ):
     # north, east, xi, phi, dphi, phi_ref, s
     # x0 = np.zeros(7)  # (box_path)
@@ -31,6 +32,9 @@ def main(
     with open(config_path, "rb") as f:
         digest = hashlib.sha256(f.read())
     toml_hash = digest.hexdigest()[:10]
+
+    if extra_options is not None:
+        config.update(extra_options)
 
     # extract parameters
     wind = np.array(config["parameters"]["wind"], dtype=np.float64)
@@ -69,7 +73,7 @@ def main(
         orig_path, _ = to_dubins(path_pyobj)
         append_loiter(dubins_path, 60)
 
-    x0 = np.array([*dubins_path.eval(0), np.pi / 4, 0.0, 0.0, 0.0, 0.0])
+    x0 = np.array([*dubins_path.eval(0), np.pi / 2, 0.0, 0.0, 0.0, 0.0])
     if controller in ["pt", "empcc"]:
         "Append path parameters"
         param_fn = curry_params(wind, v_A, dubins_path)
