@@ -3,11 +3,11 @@ import typer
 import pickle
 from pathlib import Path
 from run_ocp import run_ocp
+from acados_ocp import setup_model
 from plot_fdm import plot_fdm, animate_fdm
 import matplotlib.pyplot as plt
-from mpcc.pydubins import DubinsPath
 from mpcc.serialization_schema import path_adapter, to_dubins
-from path_utils import append_loiter
+from path_utils import append_loiter, curry_params
 from typing import Optional
 import toml
 import hashlib
@@ -22,48 +22,44 @@ def main(
     write: bool = True,
     animate: bool = False,
     plot: bool = False,
-    Tf: Optional[float] = None,
-    N_horizon: Optional[int] = None,
-    phi_max_deg: Optional[int] = None,
-    Nsim: Optional[int] = None,
 ):
     # north, east, xi, phi, dphi, phi_ref, s
     # x0 = np.zeros(7)  # (box_path)
 
+    # load the path
     config = toml.load(config_path)
     with open(config_path, "rb") as f:
         digest = hashlib.sha256(f.read())
     toml_hash = digest.hexdigest()[:10]
 
+    # extract parameters
     wind = np.array(config["parameters"]["wind"], dtype=np.float64)
     v_A = config["parameters"]["v_A"]
 
-    controller_params = config["controllers"][controller]
-    model_parameters = config["model"]
-    path_constraints = config["constraints"]["path"]
+    # sub configurations
+    controller_config = config["controllers"][controller]
+    model_config = config["model"]
+    constraints_config = config["constraints"]["path"]
+    rti_config = config["rti"]
 
+    # name for saving data
     path_name = path.split("/")[-1].split(".")[0]
     name = f"{path_name}_{controller}_{extra_name}_{toml_hash}"
     pklfile = Path(f"pickled_data/{name}.pkl")
 
+    # determine simulation parameters with command-line override
     defaults = config["simulation"]["defaults"]
-    if Tf is None:
-        Tf = defaults["Tf"]
-    if N_horizon is None:
-        N_horizon = defaults["N_horizon"]
-    if Nsim is None:
-        Nsim = defaults["Nsim"]
-    if phi_max_deg is None:
-        phi_max = np.radians(config["constraints"]["state"]["phi_max_deg"])
-    else:
-        phi_max = np.radians(phi_max_deg)
+    Tf = defaults["Tf"]
+    N_horizon = defaults["N_horizon"]
+    Nsim = defaults["Nsim"]
+    phi_max = np.radians(config["constraints"]["state"]["phi_max_deg"])
 
     print(f"""
-Running simulation with {controller} controller
-Tf = {Tf}
-N_horizon = {N_horizon}
-Nsim = {Nsim}
-phi_max = {np.degrees(phi_max)}""")
+        Running simulation with {controller} controller
+        Tf = {Tf}
+        N_horizon = {N_horizon}
+        Nsim = {Nsim}
+        phi_max = {np.degrees(phi_max)}""")
 
     # load test path
     print("Loading path", path_name)
@@ -74,22 +70,30 @@ phi_max = {np.degrees(phi_max)}""")
         append_loiter(dubins_path, 60)
 
     x0 = np.array([*dubins_path.eval(0), np.pi / 4, 0.0, 0.0, 0.0, 0.0])
+    if controller in ["pt", "empcc"]:
+        "Append path parameters"
+        param_fn = curry_params(wind, v_A, dubins_path)
+    else:
+        param_fn = lambda s: np.array([*wind, v_A])
 
     # run simulation
     if not read:
-        simU, simX, model, costs, params = run_ocp(
+        ocp, solver, integrator = setup_model(
             x0,
-            Tf,
-            N_horizon,
             phi_max,
-            Nsim,
-            wind,
-            v_A,
-            dubins_path,
-            controller_type=controller,
-            controller_params=controller_params,
-            model_parameters=model_parameters,
-            path_constraints=path_constraints,
+            N_horizon,
+            Tf,
+            param_fn(0),
+            controller,
+            controller_config,
+            model_config,
+            constraints_config,
+            orig_path if controller == "mpcc" else dubins_path,
+            True,
+        )
+
+        simU, simX, costs, params, t_preparation, t_feedback = run_ocp(
+            ocp, solver, integrator, Nsim, param_fn, rti_config, True
         )
 
         t = np.linspace(0, (Tf / N_horizon) * Nsim, Nsim + 1)
@@ -97,10 +101,12 @@ phi_max = {np.degrees(phi_max)}""")
             "t": t,
             "u": simU,
             "x": simX,
+            "t_preparation": t_preparation,
+            "t_feedback": t_feedback,
             "costs": costs,
             "params": params,
-            "u_labels": model.u_labels,
-            "x_labels": model.x_labels,
+            "u_labels": ocp.model.u_labels,
+            "x_labels": ocp.model.x_labels,
             "config": config,
         }
 
@@ -118,7 +124,7 @@ phi_max = {np.degrees(phi_max)}""")
     kwargs = data | dict(
         path=orig_path,
         phi_max=phi_max,
-        path_constraints=path_constraints,
+        path_constraints=constraints_config,
     )
 
     if animate:
@@ -132,7 +138,6 @@ phi_max = {np.degrees(phi_max)}""")
         fname = f"figures/{name}.png"
         print("Writing plot to", fname)
         plt.savefig(fname)
-        plt.show()
 
 
 if __name__ == "__main__":

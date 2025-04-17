@@ -42,8 +42,13 @@ def setup_model(
     ny = controller_config["ny"]
     ny_e = controller_config["ny_e"]
 
-    ocp.cost.cost_type = "CONVEX_OVER_NONLINEAR"
-    ocp.cost.cost_type_e = "CONVEX_OVER_NONLINEAR"  # terminal node
+    if controller_type in ["pt", "empcc"]:
+        ocp.cost.cost_type = "CONVEX_OVER_NONLINEAR"
+        ocp.cost.cost_type_e = "CONVEX_OVER_NONLINEAR"  # terminal node
+
+    else:
+        ocp.cost.cost_type = "EXTERNAL"
+        ocp.cost.cost_type_e = "EXTERNAL"
 
     ocp.model = model
 
@@ -87,7 +92,9 @@ def setup_model(
     ocp.solver_options.tf = Tf
 
     ocp.solver_options.qp_solver = "PARTIAL_CONDENSING_HPIPM"
-    ocp.solver_options.hessian_approx = "GAUSS_NEWTON"
+    ocp.solver_options.hessian_approx = (
+        "EXACT" if controller_type == "mpcc" else "GAUSS_NEWTON"
+    )
     ocp.solver_options.integrator_type = "IRK"
     ocp.solver_options.sim_method_newton_iter = 10
 

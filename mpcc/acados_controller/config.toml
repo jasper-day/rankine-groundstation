@@ -23,14 +23,39 @@ Q = [10.0, 0.1, 0.01, 0.1]
 # [dphi_ref]
 R = [100]
 
+ny = 5
+ny_e = 4
+
 [controllers.empcc]
 
 # [e_c, phi, dphi]
-Q = [0.1, 0.01, 0.1]
+Q = [0.05, 0.01, 0.1]
 # [dphi_ref]
-R = [100]
+R = [500]
 # progress weight
 rho = 10
+
+ny = 5
+ny_e = 3
+
+
+[controllers.mpcc]
+
+# number of breakpoints
+n_s = 100
+
+# progress weight
+rho = 10
+
+# [e_c, e_l, phi, dphi]
+Q = [0.05, 100.0, 0.01, 0.1]
+
+# [dphi_ref]
+R = [500]
+
+ny = 6
+ny_e = 4
+
 
 [constraints]
 
@@ -40,7 +65,7 @@ phi_max_deg = 30.0
 
 [constraints.path]
 # cross-path constraints
-lh = [-20.0]
+lh = [-10.0]
 uh = [20.0]
 lh_e = [-0.0]
 uh_e = [0.0]
@@ -53,7 +78,11 @@ z = [200.0]
 
 [simulation.defaults]
 
-Tf = 6.1
-N_horizon = 60
-Nsim = 1000
-intermediate_output = false
+Tf = 10.1
+N_horizon = 100
+Nsim = 2000
+
+[rti]
+
+verbose = false
+halt_on_error = false

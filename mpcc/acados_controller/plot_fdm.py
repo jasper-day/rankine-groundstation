@@ -5,6 +5,7 @@ from matplotlib.animation import FuncAnimation
 from typing import Optional
 from acados_template import latexify_plot
 from mpcc.pydubins import DubinsPath, SegmentType
+from path_utils import get_spline_numeric
 
 
 def plot_fdm(
@@ -13,6 +14,8 @@ def plot_fdm(
     phi_max: float,
     u: np.ndarray,
     x: np.ndarray,
+    t_preparation: np.ndarray,
+    t_feedback: np.ndarray,
     x_labels: list[str],
     u_labels: list[str],
     costs: np.ndarray,

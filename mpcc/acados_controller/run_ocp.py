@@ -1,54 +1,32 @@
-from acados_ocp import setup_model
 import numpy as np
 from time import perf_counter
-from mpcc.pydubins import DubinsPath
-from mpcc.acados_parameters import get_acados_path_parameters, find_correct_s
+from acados_template import AcadosOcpSolver, AcadosSimSolver, AcadosOcp
 
 
 def run_ocp(
-    x0: np.ndarray,
-    Tf: float,
-    N_horizon: int,
-    phi_max: float,
+    ocp: AcadosOcp,
+    ocp_solver: AcadosOcpSolver,
+    integrator: AcadosSimSolver,
     Nsim: int,
-    wind: np.ndarray,
-    v_A: float,
-    path: DubinsPath,
-    controller_type: str,
-    controller_params: dict,
-    model_parameters: dict,
-    path_constraints: dict,
+    param_fn,
+    rti_config: dict,
     use_RTI=True,
 ):
-    starting_params = np.zeros(14)
-    starting_params[:2] = wind
-    starting_params[2] = v_A
-    starting_params[3:] = get_acados_path_parameters(path, 0)
-    print("starting_params", starting_params)
-
-    ocp_solver, integrator = setup_model(
-        x0,
-        phi_max,
-        N_horizon,
-        Tf,
-        starting_params,
-        controller_type,
-        controller_params,
-        model_parameters,
-        path_constraints,
-        use_RTI,
-    )
+    print("starting_params", param_fn(0))
 
     nx = ocp_solver.acados_ocp.dims.nx
     nu = ocp_solver.acados_ocp.dims.nu
 
+    starting_params = param_fn(0)
+    n_p = starting_params.shape[0]
+
     simX = np.zeros((Nsim + 1, nx))
     simU = np.zeros((Nsim, nu))
     costs = np.zeros((Nsim, 1))
-    params = np.zeros((Nsim + 1, 14))
+    params = np.zeros((Nsim + 1, n_p))
 
-    simX[0, :] = x0
-    params[0, :] = starting_params
+    simX[0, :] = ocp.constraints.x0
+    params[0, :] = param_fn(0)
 
     if use_RTI:
         t_preparation = np.zeros((Nsim))
@@ -66,22 +44,18 @@ def run_ocp(
             _current_north = simX[i, 0]
             _current_east = simX[i, 1]
             try:
-                path_parameters = get_acados_path_parameters(path, current_s)
-                if i % 10 == 0:
+                path_parameters = param_fn(current_s)
+                if i % 10 == 0 and rti_config["verbose"]:
                     print("current s", current_s)
                     print("path_parameters", path_parameters)
             except AssertionError:
                 print("Hit end of path")
                 break
             # set parameters in solver
-            for stage in range(N_horizon + 1):
-                ocp_solver.set_params_sparse(stage, np.arange(3, 14), path_parameters)
+            for stage in range(ocp.solver_options.N_horizon + 1):
+                ocp_solver.set(stage, "p", path_parameters)
             # set parameters in simulator (!! very important !!)
-            new_params = np.zeros_like(starting_params)
-            new_params[:3] = starting_params[:3]
-            new_params[3:] = path_parameters
-            params[i, :] = new_params
-            integrator.set("p", new_params)
+            integrator.set("p", path_parameters)
 
             # preparation phase
             # print("prepare")
@@ -89,8 +63,8 @@ def run_ocp(
             status = ocp_solver.solve()
             t_preparation[i] = ocp_solver.get_stats("time_tot")
 
-            # if status not in [0, 2, 5]:
-            #     raise Exception(f'acados returned status {status}. Exiting.')
+            if status not in [0, 2, 5] and rti_config["halt_on_error"]:
+                raise Exception(f"acados returned status {status}. Exiting.")
 
             # set initial state
             ocp_solver.set(0, "lbx", simX[i, :])
@@ -138,9 +112,5 @@ def run_ocp(
             f"Computation time in ms: min {np.min(t):.3f} median {np.median(t):.3f} max {np.max(t):.3f}"
         )
 
-    # plot results
-    model = ocp_solver.acados_ocp.model
-    # plot_pendulum(np.linspace(0, (Tf/N_horizon)*Nsim, Nsim+1), Fmax, simU, simX, latexify=False, time_label=model.t_label, x_labels=model.x_labels, u_labels=model.u_labels)
-
     ocp_solver = None
-    return simU, simX, model, costs, params
+    return simU, simX, costs, params, t_preparation, t_feedback
