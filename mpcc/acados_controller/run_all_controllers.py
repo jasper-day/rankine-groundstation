@@ -129,5 +129,6 @@ def plot_controllers():
 if __name__ == "__main__":
     # run_controllers()
     # plot_controllers()
+    run_computational_controllers()
     plt.tight_layout()
     plt.show()
