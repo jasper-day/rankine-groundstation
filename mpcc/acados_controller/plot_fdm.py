@@ -4,7 +4,7 @@ from matplotlib import gridspec
 from matplotlib.animation import FuncAnimation
 from typing import Optional
 from acados_template import latexify_plot
-from mpcc.pydubins import DubinsPath
+from mpcc.pydubins import DubinsPath, SegmentType
 
 
 def plot_fdm(
@@ -17,6 +17,8 @@ def plot_fdm(
     u_labels: list[str],
     costs: np.ndarray,
     params: np.ndarray,
+    config: dict,
+    path_constraints: dict,
     path: Optional[DubinsPath] = None,
     offset: float = 20,
     gs: Optional[gridspec.GridSpec] = None,
@@ -29,7 +31,6 @@ def plot_fdm(
     """
     Params:
         t: time values of the discretization
-        phi_max: maximum absolute value of phi
         u: array with shape (N_sim-1, nu) or (N_sim, nu)
         x: array with shape (N_sim, nx)
         x_labels: labels of x
@@ -84,37 +85,46 @@ def plot_fdm(
     plt.subplot(gs[2])
     plt.gca().set_aspect("equal")
     th = np.linspace(0, 2 * np.pi, 1000, endpoint=True)
-    if path is None:
-        # plot a circle of radius 60
-        r = 60
-        cth = np.cos(th) * r
-        sth = np.sin(th) * r
-        if plot_legend:
-            plt.plot(cth, sth, color="C0", linestyle="--")
-    else:
-        if frame != -1:
-            th = np.linspace(0, x[-1, -1], 500)
-        else:
-            th = np.linspace(0, path.length(), 500)
-        locs = np.array([path.eval(s) for s in th])
-        # plot offsets
-        offset_paths = [path.offset_path(offset), path.offset_path(-offset)]
-        for o_path in offset_paths:
-            o_th = np.linspace(0, o_path.length(), 500)
-            o_locs = np.array([o_path.eval(s) for s in o_th])
-            plt.plot(o_locs[:, 1], o_locs[:, 0], color="gray", linestyle=":")
 
+    if frame != -1:
+        # plot path up to location
+        th = np.linspace(0, x[-1, -1], 500)
+    else:
+        th = np.linspace(0, path.length(), 500)
+    locs = np.array([path.eval(s) for s in th])
+    # plot offsets
+    offset_lower = path_constraints["lh"][0]
+    offset_upper = path_constraints["uh"][0]
+    offset_paths = [path.offset_path(offset_lower), path.offset_path(offset_upper)]
+    for o_path in offset_paths:
+        o_th = np.linspace(0, o_path.length(), 500)
+        o_locs = np.array([o_path.eval(s) for s in o_th])
+        plt.plot(o_locs[:, 1], o_locs[:, 0], color="gray", linestyle=":")
+
+    # plot centers
+    p_types = iter(path.get_types())
+
+    p_params = path.get_params()
+    i = 0
+    while i < p_params.shape[0]:
+        p_type = next(p_types)
+        if p_type == SegmentType.LINESEGMENT:
+            i += 4
+        elif p_type == SegmentType.CIRCULARSEGMENT:
+            plt.scatter(p_params[i + 1], p_params[i], color="gray")
+            i += 5
+        else:
+            raise Exception(p_type)
+
+    plt.plot(locs[:, 1], locs[:, 0], color="gray", linestyle="--")  # east then north
+    if frame != -1:
+        # plot contouring error
         plt.plot(
-            locs[:, 1], locs[:, 0], color="gray", linestyle="--"
-        )  # east then north
-        if frame != -1:
-            # plot contouring error
-            plt.plot(
-                [locs[-1, 1], east[-1]],
-                [locs[-1, 0], north[-1]],
-                linestyle=":",
-                color="C0",
-            )
+            [locs[-1, 1], east[-1]],
+            [locs[-1, 0], north[-1]],
+            linestyle=":",
+            color="C0",
+        )
     plt.plot(east, north, color=color, label=r"$x$", linestyle=linestyle)
     plt.scatter(east[0], north[0], marker="^", c="C1")
     plt.scatter(east[-1], north[-1], marker="s", c="C1")

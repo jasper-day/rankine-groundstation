@@ -1,0 +1,59 @@
+[model]
+
+# dynamic parameters
+b0 = 11.56
+a0 = 11.56
+a1 = 5.44
+# gravity
+g = 9.81
+
+["parameters"]
+
+# [north, east]
+wind = [0, 0]
+# m/s
+v_A = 14
+
+[controllers]
+
+[controllers.pt]
+
+# [e_chi, e_c, phi, dphi]
+Q = [10.0, 0.1, 0.01, 0.1]
+# [dphi_ref]
+R = [100]
+
+[controllers.empcc]
+
+# [e_c, phi, dphi]
+Q = [0.1, 0.01, 0.1]
+# [dphi_ref]
+R = [100]
+# progress weight
+rho = 10
+
+[constraints]
+
+[constraints.state]
+# maximum bank angle in degrees
+phi_max_deg = 30.0
+
+[constraints.path]
+# cross-path constraints
+lh = [-20.0]
+uh = [20.0]
+lh_e = [-0.0]
+uh_e = [0.0]
+# slack weight
+Z = [1000.0]
+z = [200.0]
+
+
+[simulation]
+
+[simulation.defaults]
+
+Tf = 6.1
+N_horizon = 60
+Nsim = 1000
+intermediate_output = false

@@ -1,37 +1,46 @@
 from acados_template import AcadosOcp, AcadosOcpSolver, AcadosSimSolver
 from fdm2d import export_fdm_2d
+from fdm2d_MX import export_fdm_2d as export_fdm_2d_MX
 import numpy as np
 from cc_controller import export_cc_controller
+from mpcc_controller import export_mpcc_controller
+from mpcc.pydubins import DubinsPath
 
 
 def setup_model(
-    x0,
-    phi_max,
-    N_horizon,
-    Tf,
-    starting_params,
-    Q,
-    R,
-    rho,
+    x0: np.ndarray,
+    phi_max: float,
+    N_horizon: int,
+    Tf: float,
+    starting_params: np.ndarray,
+    controller_type: str,
+    controller_config: dict,
+    model_config: dict,
+    constraints_config: dict[str, list[float]],
+    path: DubinsPath,
     RTI=True,
-    controller_type="pt",
 ):
     ocp = AcadosOcp(
         acados_path="/home/jasper/rankine-groundstation/mpcc/external/acados"
     )
 
-    omega = 3.4  # natural frequency of roll transfer function
-    zeta = 0.8  # damping ratio of roll transfer function
-    fdm_model = export_fdm_2d(b0=omega**2, a0=omega**2, a1=2 * zeta * omega)
-    # path tracking controller for now
-    model = export_cc_controller(
-        model=fdm_model, controller_type=controller_type, Q=Q, R=R, rho=rho
-    )
-    # nx = model.x.rows()
-    # nu = model.u.rows()
-    # num_p = model.p.rows()
-    ny = 5
-    ny_e = 4
+    if controller_type in ["pt", "empcc"]:
+        print("Exporting SX model")
+        fdm_model = export_fdm_2d(**model_config)
+        model = export_cc_controller(
+            model=fdm_model,
+            controller_type=controller_type,
+            controller_config=controller_config,
+        )
+    else:
+        print("Exporting MX model")
+        fdm_model = export_fdm_2d_MX(**model_config)
+        model = export_mpcc_controller(
+            model=fdm_model, path=path, controller_config=controller_config
+        )
+
+    ny = controller_config["ny"]
+    ny_e = controller_config["ny_e"]
 
     ocp.cost.cost_type = "CONVEX_OVER_NONLINEAR"
     ocp.cost.cost_type_e = "CONVEX_OVER_NONLINEAR"  # terminal node
@@ -48,17 +57,19 @@ def setup_model(
     ocp.constraints.idxbx = np.array([5])
 
     # cross-wise constraints (will want to be set as a "safety tunnel")
-    ocp.constraints.lh = np.array([-20])
-    ocp.constraints.uh = np.array([20])
-    ocp.constraints.lh_e = np.array([-20])
-    ocp.constraints.uh_e = np.array([20])
+    print("Constraints", constraints_config)
+
+    ocp.constraints.lh = np.array(constraints_config["lh"])
+    ocp.constraints.uh = np.array(constraints_config["uh"])
+    ocp.constraints.lh_e = np.array(constraints_config["lh_e"])
+    ocp.constraints.uh_e = np.array(constraints_config["uh_e"])
 
     # add slacks
     ocp.constraints.idxsh = np.array([0])
     ocp.constraints.idxsh_e = np.array([0])
 
-    Z = np.diag([100])
-    z = np.array([0])
+    Z = np.diag(constraints_config["Z"])
+    z = np.array(constraints_config["z"])
 
     ocp.cost.Zl = Z
     ocp.cost.Zu = Z
@@ -69,7 +80,6 @@ def setup_model(
     ocp.cost.zl_e = z
     ocp.cost.zu_e = z
 
-    # TODO: set parameter values automatically from Dubins path
     ocp.parameter_values = starting_params
 
     # set prediction horizon
@@ -101,4 +111,4 @@ def setup_model(
     # create an integrator with the same settings as used in the OCP solver.
     acados_integrator = AcadosSimSolver(ocp, json_file=solver_json)
 
-    return acados_ocp_solver, acados_integrator
+    return ocp, acados_ocp_solver, acados_integrator

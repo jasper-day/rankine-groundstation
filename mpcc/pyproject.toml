@@ -12,6 +12,7 @@ dependencies = [
     "drake<0.1",
     "acados-template",
     "pydantic>=2.10.6",
+    "toml>=0.10.2",
 ]
 
 [[tool.uv.index]]

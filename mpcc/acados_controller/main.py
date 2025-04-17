@@ -8,56 +8,62 @@ import matplotlib.pyplot as plt
 from mpcc.pydubins import DubinsPath
 from mpcc.serialization_schema import path_adapter, to_dubins
 from path_utils import append_loiter
+from typing import Optional
+import toml
+import hashlib
 
 
 def main(
     path: str = "test_path.json",
+    config_path: str = "config.toml",
+    extra_name: str = "",
+    controller: str = "pt",
     read: bool = False,
     write: bool = True,
     animate: bool = False,
     plot: bool = False,
-    Tf: float = 4.1,
-    N_horizon: int = 40,
-    phi_max_deg: int = 30,
-    Nsim: int = 4000,
-    extra_name: str = "",
-    controller: str = "pt",
+    Tf: Optional[float] = None,
+    N_horizon: Optional[int] = None,
+    phi_max_deg: Optional[int] = None,
+    Nsim: Optional[int] = None,
 ):
     # north, east, xi, phi, dphi, phi_ref, s
     # x0 = np.zeros(7)  # (box_path)
 
-    wind = np.array([0, 0])
-    v_A = 14.0
+    config = toml.load(config_path)
+    with open(config_path, "rb") as f:
+        digest = hashlib.sha256(f.read())
+    toml_hash = digest.hexdigest()[:10]
 
-    if controller == "pt":
-        Q = np.diag(
-            [
-                10,  # e_chi
-                0.1,  # e_c
-                0.01,  # phi
-                0.1,  # dphi
-            ]
-        )
-    else:
-        Q = np.diag(
-            [
-                0.1,  # e_c
-                0.01,  # phi
-                0.1,  # dphi
-            ]
-        )
-    R = np.diag(
-        [
-            100  # u
-        ]
-    )
-    rho = 10
+    wind = np.array(config["parameters"]["wind"], dtype=np.float64)
+    v_A = config["parameters"]["v_A"]
 
-    phi_max = np.radians(phi_max_deg)
+    controller_params = config["controllers"][controller]
+    model_parameters = config["model"]
+    path_constraints = config["constraints"]["path"]
 
     path_name = path.split("/")[-1].split(".")[0]
-    name = f"{path_name}_{controller}_Tf{Tf:.2f}_Nh{N_horizon}_Nsim{Nsim}_phimax{phi_max_deg}_{extra_name}"
+    name = f"{path_name}_{controller}_{extra_name}_{toml_hash}"
     pklfile = Path(f"pickled_data/{name}.pkl")
+
+    defaults = config["simulation"]["defaults"]
+    if Tf is None:
+        Tf = defaults["Tf"]
+    if N_horizon is None:
+        N_horizon = defaults["N_horizon"]
+    if Nsim is None:
+        Nsim = defaults["Nsim"]
+    if phi_max_deg is None:
+        phi_max = np.radians(config["constraints"]["state"]["phi_max_deg"])
+    else:
+        phi_max = np.radians(phi_max_deg)
+
+    print(f"""
+Running simulation with {controller} controller
+Tf = {Tf}
+N_horizon = {N_horizon}
+Nsim = {Nsim}
+phi_max = {np.degrees(phi_max)}""")
 
     # load test path
     print("Loading path", path_name)
@@ -67,7 +73,7 @@ def main(
         orig_path, _ = to_dubins(path_pyobj)
         append_loiter(dubins_path, 60)
 
-    x0 = np.array([*dubins_path.eval(0), np.pi / 4, 0.0, 0.0, 0.0, 0.0])  # (test_path)
+    x0 = np.array([*dubins_path.eval(0), np.pi / 4, 0.0, 0.0, 0.0, 0.0])
 
     # run simulation
     if not read:
@@ -77,13 +83,13 @@ def main(
             N_horizon,
             phi_max,
             Nsim,
-            Q,
-            R,
-            rho,
             wind,
             v_A,
             dubins_path,
             controller_type=controller,
+            controller_params=controller_params,
+            model_parameters=model_parameters,
+            path_constraints=path_constraints,
         )
 
         t = np.linspace(0, (Tf / N_horizon) * Nsim, Nsim + 1)
@@ -95,6 +101,7 @@ def main(
             "params": params,
             "u_labels": model.u_labels,
             "x_labels": model.x_labels,
+            "config": config,
         }
 
         if write:
@@ -111,6 +118,7 @@ def main(
     kwargs = data | dict(
         path=orig_path,
         phi_max=phi_max,
+        path_constraints=path_constraints,
     )
 
     if animate:

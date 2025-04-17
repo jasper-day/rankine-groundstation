@@ -37,8 +37,10 @@ def calc(x, u, p, g: float, b0: float, a0: float, a1: float):
     circ_c = np.array([active_params[0], active_params[1]])
     circ_xc = pos - circ_c
     circ_r = active_params[2]
+    circ_dir = active_params[3]
     line_ba = line_b - line_a
-    line_ba_n = line_ba / norm_2(line_ba)
+    line_T_n = line_ba / norm_2(line_ba)
+    line_N_n = np.array([-line_T_n[1], line_T_n[0]])
     line_posa = pos - line_a
     x1 = active_params[0]
     y1 = active_params[1]
@@ -55,21 +57,20 @@ def calc(x, u, p, g: float, b0: float, a0: float, a1: float):
         * dot(dpos, np.array([-circ_xc[1], circ_xc[0]]))
         / norm_2(circ_xc) ** 2
         if active_type > 0.5
-        else dot(dpos, line_ba_n)
+        else dot(dpos, line_T_n)
     )
 
     e_c = (  # contouring error
         # circle
         # norm_2((1 - fabs(active_params[2]) / norm_2(circ_xc)) * circ_xc),
         # equal to
-        norm_2(circ_xc) - fabs(circ_r)
+        circ_dir * (norm_2(circ_xc) - circ_r)
         if active_type > 0.5
         # line
         # norm_2(line_posa - line_ba_n * dot(line_ba_n, line_posa)),
         # https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line
         # seems better able to cope with numerical sensitivity
-        else ((y2 - y1) * north - (x2 - x1) * east + x2 * y1 - y2 * x1)
-        / norm_2(line_ba)
+        else dot(line_posa, line_N_n)
     )
 
     xdot = np.array(
@@ -92,7 +93,7 @@ def calc(x, u, p, g: float, b0: float, a0: float, a1: float):
         # circle
         (
             atan2(circ_xc[0], -circ_xc[1])
-            if circ_r > 0
+            if circ_dir > 0
             else atan2(-circ_xc[0], circ_xc[1])
         )
         if active_type > 0.5
@@ -105,7 +106,7 @@ def calc(x, u, p, g: float, b0: float, a0: float, a1: float):
     return xdot, e_c, e_chi, chi, chi_d
 
 
-def main(filename: str):
+def main(filename: str, path: str):
     from recover_data import load_data
 
     data = load_data(filename)
@@ -142,7 +143,7 @@ def main(filename: str):
     east = x[:, 1]
 
     # load test path
-    with open("test_path.json", "r") as f:
+    with open(path, "r") as f:
         path_pyobj = path_adapter.validate_json(f.read())
         dubins_path, _ = to_dubins(path_pyobj)
 
@@ -196,8 +197,9 @@ def main(filename: str):
     plt.ylabel("East")
     plt.show()
     plt.subplot(211)
-    plt.plot(t, ds)
-    plt.plot(t, params[:-1, 3])
+    plt.plot(t, ds, label="ds")
+    plt.plot(t, params[:-1, 3], label="s_switch")
+    plt.legend()
 
     plt.subplot(212)
     plt.plot(t, errors[:, 0], label="e_c")
@@ -206,7 +208,8 @@ def main(filename: str):
     # plt.plot(t, errors[:, 1], label="e_chi")
     # # plt.plot(t, s[:-1], label="s")
     # # plt.plot(t, s_actual[:-1], label="s_actual")
-    # plt.legend()
+    plt.grid()
+    plt.legend()
     plt.show()
 
 

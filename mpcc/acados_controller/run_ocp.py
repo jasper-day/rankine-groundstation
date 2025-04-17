@@ -11,14 +11,14 @@ def run_ocp(
     N_horizon: int,
     phi_max: float,
     Nsim: int,
-    Q: np.ndarray,
-    R: np.ndarray,
-    rho: float,
     wind: np.ndarray,
     v_A: float,
     path: DubinsPath,
+    controller_type: str,
+    controller_params: dict,
+    model_parameters: dict,
+    path_constraints: dict,
     use_RTI=True,
-    controller_type="pt",
 ):
     starting_params = np.zeros(14)
     starting_params[:2] = wind
@@ -27,7 +27,16 @@ def run_ocp(
     print("starting_params", starting_params)
 
     ocp_solver, integrator = setup_model(
-        x0, phi_max, N_horizon, Tf, starting_params, Q, R, rho, use_RTI, controller_type
+        x0,
+        phi_max,
+        N_horizon,
+        Tf,
+        starting_params,
+        controller_type,
+        controller_params,
+        model_parameters,
+        path_constraints,
+        use_RTI,
     )
 
     nx = ocp_solver.acados_ocp.dims.nx
