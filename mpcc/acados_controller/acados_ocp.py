@@ -20,9 +20,7 @@ def setup_model(
     path: DubinsPath,
     RTI=True,
 ):
-    ocp = AcadosOcp(
-        acados_path="/home/jasper/rankine-groundstation/mpcc/external/acados"
-    )
+    ocp = AcadosOcp()
 
     if controller_type in ["pt", "empcc"]:
         print("Exporting SX model")
