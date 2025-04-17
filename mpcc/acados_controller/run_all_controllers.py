@@ -29,15 +29,29 @@ def run_controllers():
             plt.close()
 
 
+test_cases = [[4.1, 40], [6.1, 60], [8.1, 80], [10.1, 100], [12.1, 120]]
+
 
 def run_computational_controllers():
     for case in test_cases:
+        extra_config = {
+            "simulation": {
+                "defaults": {
+                    "Tf": case[0],
+                    "N_horizon": case[1],
+                    "Nsim": 3800,
+                }
+            }
+        }
         for controller in controllers:
+            print("Running", controller, "with", extra_config)
             main(
-                path = "paths/twisty_test_path",
-                controller=
+                path="paths/twisty_test_path",
+                controller=controller,
+                plot=True,
+                extra_options=extra_config,
             )
-    
+            plt.close()
 
 
 def get_data(path, controller, hsh):
