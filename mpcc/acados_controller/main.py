@@ -8,7 +8,8 @@ from plot_fdm import plot_fdm, animate_fdm
 import matplotlib.pyplot as plt
 from mpcc.serialization_schema import path_adapter, to_dubins
 from path_utils import append_loiter, curry_params
-from typing import Optional
+from dryden_turbulence import TurbulenceSimulator
+from discrete_gust import get_gust
 import toml
 import hashlib
 
@@ -73,13 +74,29 @@ def main(
         orig_path, _ = to_dubins(path_pyobj)
         append_loiter(dubins_path, 60)
 
-    x0 = np.array([*dubins_path.eval(0), np.pi / 2, 0.0, 0.0, 0.0, 0.0])
+    # set up turbulence
+    if config["simulation"]["turbulence"]["enabled"]:
+        h = config["simulation"]["turbulence"]["h"]
+        u_h = np.linalg.norm(wind)
+        u_6 = TurbulenceSimulator.get_windspeed_6(u_h, h)
+        tsim = TurbulenceSimulator(u_6, h, v_A, 0.1)
+    else:
+        tsim = None
+
+    # set up discrete gust
+    if config["simulation"]["gust"]["enabled"]:
+        gust = get_gust(config["simulation"]["gust"])
+    else:
+        gust = None
+
+    x0 = np.array([*dubins_path.eval(0.0), np.pi / 2, 0.0, 0.0, 0.0, 0.0])
     if controller in ["pt", "empcc"]:
         "Append path parameters"
         param_fn = curry_params(wind, v_A, dubins_path)
     else:
         param_fn = lambda s: np.array([*wind, v_A])
 
+    data = None  # default value
     # run simulation
     if not read:
         ocp, solver, integrator = setup_model(
@@ -93,11 +110,17 @@ def main(
             model_config,
             constraints_config,
             orig_path if controller == "mpcc" else dubins_path,
-            True,
         )
 
         simU, simX, costs, params, t_preparation, t_feedback = run_ocp(
-            ocp, solver, integrator, Nsim, param_fn, rti_config, True
+            ocp,
+            solver,
+            integrator,
+            Nsim,
+            param_fn,
+            rti_config,
+            tsim=tsim,
+            gust=gust,
         )
 
         t = np.linspace(0, (Tf / N_horizon) * Nsim, Nsim + 1)
@@ -125,6 +148,7 @@ def main(
         with open(pklfile, "rb") as f:
             data = pickle.load(f)
 
+    assert data is not None
     kwargs = data | dict(
         path=orig_path,
         phi_max=phi_max,
