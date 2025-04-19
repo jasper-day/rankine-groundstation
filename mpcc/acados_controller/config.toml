@@ -10,7 +10,7 @@ g = 9.81
 ["parameters"]
 
 # [north, east]
-wind = [0, 0]
+wind = [0, -6]
 # m/s
 v_A = 14
 
@@ -67,22 +67,47 @@ phi_max_deg = 30.0
 # cross-path constraints
 lh = [-25.0]
 uh = [20.0]
+# terminal constraints
 lh_e = [-0.0]
 uh_e = [0.0]
 # slack weight
 Z = [1000.0]
-z = [200.0]
+z = [100.0]
+# terminal slack weight
+Z_e = [100.0]
+z_e = [10.0]
 
 
 [simulation]
 
 [simulation.defaults]
 
-Tf = 6.1
-N_horizon = 60
-Nsim = 3800
+Tf = 12.1
+N_horizon = 120
+Nsim = 2000
+
+[simulation.turbulence]
+
+enabled = true
+# height above ground, m
+h = 30
+# u_6, time step and velocity are obtained from [simulation.defaults]
+# and [parameters] respectively
+
+[simulation.gust]
+
+enabled = true
+
+# seconds since start of simulation
+t_start = 83
+t_rampup = 93
+# maximum velocity, m/s
+v_max = [20, 0]
+# seconds since start of simulation
+t_rampdown = 97
+t_end = 107
 
 [rti]
 
-verbose = false
+verbose = true
 halt_on_error = false

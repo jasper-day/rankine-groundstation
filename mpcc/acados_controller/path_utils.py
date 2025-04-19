@@ -14,7 +14,7 @@ def append_loiter(path: DubinsPath, radius: float):
     center = end + radius * np.array(
         [np.cos(heading + np.pi / 2), np.sin(heading + np.pi / 2)]
     )
-    loiter = CircularSegment(center, radius, heading - np.pi / 2, 10000)
+    loiter = CircularSegment(center, radius, heading - np.pi / 2, 10000.0)
     path.add_segment(loiter)
 
 

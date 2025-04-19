@@ -1,4 +1,4 @@
-from acados_template import AcadosOcp, AcadosOcpSolver, AcadosSimSolver
+from acados_template import AcadosOcp, AcadosOcpSolver, AcadosSimSolver, ACADOS_INFTY
 from fdm2d import export_fdm_2d
 from fdm2d_MX import export_fdm_2d as export_fdm_2d_MX
 import numpy as np
@@ -18,7 +18,6 @@ def setup_model(
     model_config: dict,
     constraints_config: dict[str, list[float]],
     path: DubinsPath,
-    RTI=True,
 ):
     ocp = AcadosOcp()
 
@@ -27,7 +26,7 @@ def setup_model(
         fdm_model = export_fdm_2d(**model_config)
         model = export_cc_controller(
             model=fdm_model,
-            controller_type=controller_type,
+            controller_type=controller_type,  # type: ignore
             controller_config=controller_config,
         )
     else:
@@ -60,28 +59,38 @@ def setup_model(
     ocp.constraints.idxbx = np.array([5])
 
     # cross-wise constraints (will want to be set as a "safety tunnel")
-    print("Constraints", constraints_config)
 
-    ocp.constraints.lh = np.array(constraints_config["lh"])
-    ocp.constraints.uh = np.array(constraints_config["uh"])
-    ocp.constraints.lh_e = np.array(constraints_config["lh_e"])
-    ocp.constraints.uh_e = np.array(constraints_config["uh_e"])
+    if controller_type != "pt":
+        print("Constraints", constraints_config)
 
-    # add slacks
-    ocp.constraints.idxsh = np.array([0])
-    ocp.constraints.idxsh_e = np.array([0])
+        ocp.constraints.lh = np.array(constraints_config["lh"])
+        ocp.constraints.uh = np.array(constraints_config["uh"])
+        ocp.constraints.lh_e = np.array(constraints_config["lh_e"])
+        ocp.constraints.uh_e = np.array(constraints_config["uh_e"])
 
-    Z = np.diag(constraints_config["Z"])
-    z = np.array(constraints_config["z"])
+        # add slacks
+        ocp.constraints.idxsh = np.array([0])
+        ocp.constraints.idxsh_e = np.array([0])
 
-    ocp.cost.Zl = Z
-    ocp.cost.Zu = Z
-    ocp.cost.Zl_e = Z
-    ocp.cost.Zu_e = Z
-    ocp.cost.zl = z
-    ocp.cost.zu = z
-    ocp.cost.zl_e = z
-    ocp.cost.zu_e = z
+        Z = np.diag(constraints_config["Z"])
+        z = np.array(constraints_config["z"])
+        Z_e = np.diag(constraints_config["Z_e"])
+        z_e = np.diag(constraints_config["z_e"])
+
+        ocp.cost.Zl = Z
+        ocp.cost.Zu = Z
+        ocp.cost.Zl_e = Z_e
+        ocp.cost.Zu_e = Z_e
+        ocp.cost.zl = z
+        ocp.cost.zu = z
+        ocp.cost.zl_e = z_e
+        ocp.cost.zu_e = z_e
+    else:
+        print("No constraints (path tracking controller)")
+        ocp.constraints.lh = np.array([-ACADOS_INFTY])
+        ocp.constraints.uh = np.array([ACADOS_INFTY])
+        ocp.constraints.lh_e = np.array([-ACADOS_INFTY])
+        ocp.constraints.uh_e = np.array([ACADOS_INFTY])
 
     ocp.parameter_values = starting_params
 
@@ -96,21 +105,16 @@ def setup_model(
     ocp.solver_options.integrator_type = "IRK"
     ocp.solver_options.sim_method_newton_iter = 10
 
-    if RTI:
-        ocp.solver_options.nlp_solver_type = "SQP_RTI"
-        ocp.solver_options.as_rti_iter = 1
-        # AS-RTI-D
-        ocp.solver_options.as_rti_level = 3
-    else:
-        ocp.solver_options.nlp_solver_type = "SQP"
-        ocp.solver_options.globalization = (
-            "MERIT_BACKTRACKING"  # turns on globalization
-        )
-        ocp.solver_options.nlp_solver_max_iter = 150
+    ocp.solver_options.nlp_solver_type = "SQP_RTI"
+    ocp.solver_options.as_rti_iter = 1
+    # AS-RTI-D
+    ocp.solver_options.as_rti_level = 3
 
     ocp.solver_options.qp_solver_cond_N = N_horizon
 
-    solver_json = "acados_ocp_" + model.name + ".json"
+    name = model.name
+    assert name is not None
+    solver_json = "acados_ocp_" + name + ".json"
     acados_ocp_solver = AcadosOcpSolver(ocp, json_file=solver_json)
 
     # create an integrator with the same settings as used in the OCP solver.
