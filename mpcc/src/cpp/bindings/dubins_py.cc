@@ -92,18 +92,20 @@ PYBIND11_MODULE(pydubins, m) {
       .def(py::init<>())
       .def(py::init<std::vector<std::shared_ptr<Segment<T>>>>(),
            py::arg("segments"))
-      .def("add_segment",
-           [](DubinsPath<T>& self, const std::shared_ptr<Segment<T>>& segment) {
-             if (auto line =
-                     dynamic_cast<const LineSegment<T>*>(segment.get())) {
-               self.add_segment(std::make_unique<LineSegment<T>>(*line));
-             } else if (auto circle = dynamic_cast<const CircularSegment<T>*>(
-                            segment.get())) {
-               self.add_segment(std::make_unique<CircularSegment<T>>(*circle));
-             } else {
-               throw std::runtime_error("Unknown segment type");
-             }
-           })
+      .def(
+          "add_segment",
+          [](DubinsPath<T>& self, const std::shared_ptr<Segment<T>>& segment) {
+            if (auto line =
+                    dynamic_cast<const LineSegment<T>*>(segment.get())) {
+              self.add_segment(std::make_unique<LineSegment<T>>(*line));
+            } else if (auto circle = dynamic_cast<const CircularSegment<T>*>(
+                           segment.get())) {
+              self.add_segment(std::make_unique<CircularSegment<T>>(*circle));
+            } else {
+              throw std::runtime_error("Unknown segment type");
+            }
+          },
+          py::keep_alive<1, 2>())
       .def("num_segments", &DubinsPath<T>::num_segments)
       .def("get_segment", &DubinsPath<T>::get_segment)
       .def("lengths", &DubinsPath<T>::lengths)
