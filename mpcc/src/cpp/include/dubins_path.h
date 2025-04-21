@@ -33,9 +33,7 @@ class DubinsPath {
   DubinsPath() = default;
 
   DubinsPath(std::vector<std::shared_ptr<Segment<T>>> segments_in)
-      : segments_(segments_in) {
-    lengths_ = lengths();
-  }
+      : segments_(segments_in) {}
 
   ~DubinsPath() = default;
 
@@ -68,7 +66,7 @@ class DubinsPath {
   }
 
   /// Add a segment to the path
-  void add_segment(std::shared_ptr<Segment<T>> segment) {
+  void add_segment(std::shared_ptr<Segment<T>>&& segment) {
     segments_.push_back(std::move(segment));
   }
 
@@ -77,7 +75,7 @@ class DubinsPath {
 
   /// Get a segment by index
   const std::shared_ptr<Segment<T>> get_segment(size_t index) const {
-    return segments_[index];
+    return segments_.at(index);
   }
 
   /// Get the associated arclengths
@@ -151,7 +149,6 @@ class DubinsPath {
 
  private:
   std::vector<std::shared_ptr<Segment<T>>> segments_;
-  std::vector<T> lengths_;
 };
 
 }  // namespace dubins

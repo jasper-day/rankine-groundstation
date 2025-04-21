@@ -20,7 +20,8 @@ std::vector<T> DubinsPath<T>::lengths() const {
 
 template <typename T>
 T DubinsPath<T>::length() const {
-  return std::accumulate(lengths_.begin(), lengths_.end(), T(0));
+  auto const curr_lengths = lengths();
+  return std::accumulate(curr_lengths.begin(), curr_lengths.end(), T(0));
 }
 
 template <typename T>
@@ -30,9 +31,10 @@ drake::Vector2<T> DubinsPath<T>::eval(T arclength) const {
         "Cannot evaluate empty path - no valid position exists");
   // does not recompute the lengths; instead uses cached value
   int i = 0;
+  auto const curr_lengths = lengths();
   while (i != segments_.size()) {
-    if (arclength < lengths_[i]) break;
-    arclength -= lengths_[i];
+    if (arclength < curr_lengths[i]) break;
+    arclength -= curr_lengths[i];
     ++i;
   }
   if (i == segments_.size()) return segments_.back()->end();  // beyond end
