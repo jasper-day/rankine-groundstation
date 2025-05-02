@@ -33,6 +33,10 @@
     // currentArclengthAlongPath: number
     // ...
     // }
+    //
+    //
+    // Export to json
+    // soft disable regions
     import "cesium/Build/Cesium/Widgets/widgets.css";
 
     import { Cartesian3, Ion, Math as CesiumMath, Terrain, Viewer, Cartesian2, Cartographic } from "cesium";
@@ -67,6 +71,7 @@
 
     let viewer: Viewer | undefined;
     let ctx: CanvasRenderingContext2D | null = null;
+    let pfd_ctx: CanvasRenderingContext2D | null = null;
     let tool: "Line" | "Arc" | "Empty" = "Empty";
     let editing_mode: "Create" | "Edit" = "Create";
     let intermediate_point: Local3 | undefined = undefined;
@@ -167,9 +172,17 @@
     onMount(() => {
         // Initialize the Cesium Viewer in the HTML element with the `cesiumContainer` ID.
         viewer = new Viewer("cesiumContainer", {
-            terrain: Terrain.fromWorldTerrain()
+            terrain: Terrain.fromWorldTerrain(),
+            fullscreenButton: false,
+            homeButton: false,
+            sceneModePicker: false,
+            timeline: false,
+            animation: false,
+            // selectionIndicator: false,
+            navigationInstructionsInitiallyVisible: false,
         });
         ctx = canvas.getContext("2d");
+        pfd_ctx = pfd.getContext("2d");
 
         // Fly the camera to the origin longitude, latitude, and height.
         viewer.camera.flyTo({
@@ -197,6 +210,7 @@
                     draw_intermediate_shape(viewer, intermediate_point, ctx);
                 }
             }
+            draw_horizon();
         });
 
         // Chrome doesn't support mouse events
@@ -209,7 +223,7 @@
     function mousedown(event: MouseEvent) {
         if (viewer !== undefined) {
             const cartesian = viewer.camera.pickEllipsoid(
-                new Cartesian3(event.clientX, event.clientY),
+                new Cartesian3(event.layerX, event.layerY),
                 viewer.scene.ellipsoid
             );
             if (!cartesian) return; // just ignore an invalid position
@@ -244,7 +258,7 @@
                 }
             } else if (tool == "Empty") {
                 // check for dragging
-                const mouse = new Cartesian2(event.clientX, event.clientY);
+                const mouse = new Cartesian2(event.layerX, event.layerY);
                 let idx = 0;
                 const max_sq_dist = HANDLE_POINT_RADIUS * HANDLE_POINT_RADIUS;
                 for (const s of shapes) {
@@ -334,7 +348,7 @@
             close_path();
             editing_mode = "Edit";
         } else if (event.key == "1" && viewer) {
-            const pos_screen = new Cartesian2(viewer.scene.canvas.clientWidth / 2, viewer.scene.canvas.clientHeight / 2);
+            const pos_screen = new Cartesian2(viewer.scene.canvas.layerWidth / 2, viewer.scene.canvas.layerHeight / 2);
             let pos_cartesian = viewer.camera.pickEllipsoid(pos_screen, viewer.scene.ellipsoid);
             if (pos_cartesian === undefined) return;
             let pos_cartographic = Cartographic.fromCartesian(pos_cartesian);
@@ -354,11 +368,11 @@
 
     let mouseX: number, mouseY: number;
     function mousemove(event: MouseEvent) {
-        mouseX = event.clientX;
-        mouseY = event.clientY;
+        mouseX = event.layerX;
+        mouseY = event.layerY;
         if (drag_object !== undefined && viewer !== undefined) {
             const ellipsoid = viewer.scene.ellipsoid;
-            const cartesian = viewer.camera.pickEllipsoid(new Cartesian3(event.clientX, event.clientY), ellipsoid);
+            const cartesian = viewer.camera.pickEllipsoid(new Cartesian3(mouseX, mouseY), ellipsoid);
             if (!cartesian) return; // just ignore an invalid position
             let local = Local3.fromCartesian(cartesian);
             local.z = 100;
@@ -455,9 +469,95 @@
             ctx.stroke();
         }
     }
-    let canvas: HTMLCanvasElement;
-</script>
 
-<canvas id="canvas" style="z-index: 2; position:absolute; pointer-events: none;" bind:this={canvas}></canvas>
-<div id="cesiumContainer" style="height:max-content; z-index: 1;position:relative;"></div>
-<svelte:window on:keydown={keypress} on:mousemove|preventDefault={mousemove} />
+    import wings_src from "$lib/assets/wings.png";
+    const wings = new Image();
+    wings.src = wings_src;
+
+    function draw_horizon() {
+        if (pfd_ctx) {
+            pfd.width = pfd.clientWidth;
+            pfd.height = pfd.clientHeight;
+            let pitch = 10 / 180 * Math.PI;
+            let roll = 30 / 180 * Math.PI;
+
+            const w = pfd.width;
+            // const h = pfd.height;
+            const h = 512;
+            const r = Math.tan(roll) * w;
+            const f = 200;
+            const x0 = r * Math.cos(Math.PI + roll) + w/2;
+            const y0 = r * Math.sin(Math.PI + roll) + h/2 - pitch * f;
+            const x1 = r * Math.cos(roll) + w/2;
+            const y1 = r * Math.sin(roll) + h/2 - pitch * f;
+
+            pfd_ctx.fillStyle = "#ffffff";
+            pfd_ctx.strokeStyle = "#000000";
+            pfd_ctx.fillRect(0, 0, w, h);
+
+            pfd_ctx.fillStyle = "#5b93c5";
+            pfd_ctx.beginPath()
+            pfd_ctx.moveTo(x0, y0);
+            pfd_ctx.lineTo(x1, y1);
+            pfd_ctx.lineTo(w, 0);
+            pfd_ctx.lineTo(0, 0);
+            pfd_ctx.lineTo(x0, y0);
+            pfd_ctx.fill();
+
+            pfd_ctx.fillStyle = "#7d5233";
+            pfd_ctx.beginPath()
+            pfd_ctx.moveTo(x0, y0);
+            pfd_ctx.lineTo(x1, y1);
+            pfd_ctx.lineTo(w, h);
+            pfd_ctx.lineTo(0, h);
+            pfd_ctx.lineTo(x0, y0);
+            pfd_ctx.fill();
+            
+            pfd_ctx.beginPath();
+            pfd_ctx.moveTo(0, h/2);
+            pfd_ctx.lineTo(w, h/2);
+            pfd_ctx.stroke();
+
+
+            const desired_width = w/2.5;
+            const ar = wings.height / wings.width;
+            const height = ar * desired_width;
+            const centre_x = 237 * desired_width / wings.width, centre_y = 10 * height / wings.height;
+            pfd_ctx.drawImage(wings, w/2 - centre_x, h/2 - centre_y, desired_width, height);
+        }
+    }
+    let canvas: HTMLCanvasElement;
+    let pfd: HTMLCanvasElement;
+</script>
+<canvas id="pfd" bind:this={pfd}></canvas>
+<canvas id="canvas" bind:this={canvas}></canvas>
+<div id="cesiumContainer"></div>
+<svelte:window on:keydown={keypress} on:mousemove|preventDefault={mousemove}/>
+
+<style>
+    #canvas {
+        z-index: 2;
+        position:absolute;
+        pointer-events: none;
+        width: 70%;
+        height: 100%;
+        top: 0;
+        left: 30%;
+    }
+
+    #cesiumContainer {
+        height: 100%;
+        width: 70%;
+        z-index: 1;
+        position: absolute;
+        top: 0;
+        left: 30%;
+    }
+    #pfd {
+        position: absolute;
+        width: 30%;
+        height: 100%;
+        top: 0;
+        left: 0;
+    }
+</style>
