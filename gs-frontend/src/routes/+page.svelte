@@ -478,21 +478,21 @@
         if (pfd_ctx) {
             pfd.width = pfd.clientWidth;
             pfd.height = pfd.clientHeight;
-            let pitch = 40 / 180 * Math.PI;
-            let roll = 0 / 180 * Math.PI;
+            let pitch = 0 / 180 * Math.PI;
+            let roll = 30 / 180 * Math.PI;
 
             const w = pfd.width;
             const h = pfd.height;
-            const f = 400;
-            const r = Math.max(w, h) + Math.PI * f;
+            const pitchbar_height = 500;
+            const r = Math.max(w, h) + Math.PI * pitchbar_height;
             const dx0 = r * Math.cos(Math.PI + roll);
             const dy0 = r * Math.sin(Math.PI + roll);
             const dx1 = r * Math.cos(roll)
             const dy1 = r * Math.sin(roll)
-            const x0 = dx0 + w/2 + pitch * f * Math.sin(-roll);
-            const y0 = dy0 + h/2 + pitch * f * Math.cos(roll);
-            const x1 = dx1 + w/2 + pitch * f * Math.sin(-roll);
-            const y1 = dy1 + h/2 + pitch * f * Math.cos(roll);
+            const x0 = dx0 + w/2 + pitch * pitchbar_height * Math.sin(-roll);
+            const y0 = dy0 + h/2 + pitch * pitchbar_height * Math.cos(roll);
+            const x1 = dx1 + w/2 + pitch * pitchbar_height * Math.sin(-roll);
+            const y1 = dy1 + h/2 + pitch * pitchbar_height * Math.cos(roll);
 
             const x3 = x0 - 2 * dy0;
             const y3 = y0 + 2 * dx0;
@@ -526,6 +526,9 @@
             pfd_ctx.fill();
 
             pfd_ctx.strokeStyle = "#ffffff";
+            pfd_ctx.fillStyle = "#dddddd";
+            pfd_ctx.font = "20px sans-serif";
+            pfd_ctx.textBaseline = "middle";
             for (let theta = -90; theta < 90; theta += 2.5) {
                 let bar_len = 20;
                 if (Math.abs(theta) < 0.01) {
@@ -535,7 +538,7 @@
                 } else if (Math.abs(theta % 5) < 0.01) {
                     bar_len = 40;
                 }
-                const pitch_adjust = (pitch + theta / 180 * Math.PI) * f;
+                const pitch_adjust = (pitch + theta / 180 * Math.PI) * pitchbar_height;
                 const x0 = bar_len * Math.cos(Math.PI + roll) + w/2 + pitch_adjust * Math.sin(-roll);
                 const y0 = bar_len * Math.sin(Math.PI + roll) + h/2 + pitch_adjust * Math.cos(roll);
                 const x1 = bar_len * Math.cos(roll)           + w/2 + pitch_adjust * Math.sin(-roll);
@@ -544,7 +547,80 @@
                 pfd_ctx.moveTo(x0, y0);
                 pfd_ctx.lineTo(x1, y1);
                 pfd_ctx.stroke();
+                if (bar_len == 80) {
+                    pfd_ctx.save();
+                    pfd_ctx.translate(x0, y0);
+                    pfd_ctx.rotate(roll);
+                    pfd_ctx.fillText(Math.abs(theta).toString(), -30, 0);
+                    pfd_ctx.fillText(Math.abs(theta).toString(), bar_len * 2 + 5, 0);
+                    pfd_ctx.restore();
+                }
             }
+
+
+            const x0_roll = w/2;
+            const y0_roll = h/2;
+            const roll_line_len = 15;
+            const roll_r = h/2 - 20;
+            const arrow_clearance = 10;
+
+            pfd_ctx.fillStyle = "#5b93c5";
+            pfd_ctx.beginPath();
+            {
+            const x1 = (roll_r - roll_line_len) * Math.cos(-40 / 180 * Math.PI -Math.PI/2) + x0_roll;
+            const y1 = (roll_r - roll_line_len) * Math.sin(-40 / 180 * Math.PI -Math.PI/2) + y0_roll;
+            pfd_ctx.moveTo(x1, y1);
+            }
+            for (let theta = -40; theta <= 40; theta += 10) {
+                const theta_rad = theta / 180 * Math.PI - Math.PI/2;
+                const x1 = (roll_r - roll_line_len - arrow_clearance) * Math.cos(theta_rad) + x0_roll;
+                const y1 = (roll_r - roll_line_len - arrow_clearance) * Math.sin(theta_rad) + y0_roll;
+                pfd_ctx.lineTo(x1, y1);
+            }
+            const y = (roll_r - roll_line_len) * Math.sin(40 / 180 * Math.PI - Math.PI/2) + y0_roll;
+            pfd_ctx.lineTo(w, y);
+            pfd_ctx.lineTo(w, 0);
+            pfd_ctx.lineTo(0, 0);
+            pfd_ctx.lineTo(0, y);
+            pfd_ctx.fill();
+
+            pfd_ctx.fillStyle = "#dddddd";
+
+            for (let theta = -40; theta <= 40; theta += 10) {
+                const theta_rad = theta / 180 * Math.PI - Math.PI/2;
+                const x0 = roll_r * Math.cos(theta_rad) + x0_roll;
+                const y0 = roll_r * Math.sin(theta_rad) + y0_roll;
+                const x1 = (roll_r - roll_line_len) * Math.cos(theta_rad) + x0_roll;
+                const y1 = (roll_r - roll_line_len) * Math.sin(theta_rad) + y0_roll;
+                pfd_ctx.beginPath();
+                pfd_ctx.moveTo(x0, y0);
+                pfd_ctx.lineTo(x1, y1);
+                pfd_ctx.stroke();
+
+                pfd_ctx.save();
+                pfd_ctx.translate(x0, y0);
+                pfd_ctx.rotate(theta_rad + Math.PI/2);
+                pfd_ctx.fillText(Math.abs(theta).toString(), -pfd_ctx.measureText(Math.abs(theta).toString()).width / 2, -10);
+                pfd_ctx.restore();
+            }
+
+            pfd_ctx.lineWidth = 2;
+            {
+                const r0 = roll_r - roll_line_len - arrow_clearance - 2;
+                const x0 = (r0) * Math.cos(roll + 0.06 - Math.PI/2) + w/2;
+                const y0 = (r0) * Math.sin(roll + 0.06 - Math.PI/2) + h/2;
+                const x1 = (r0) * Math.cos(roll - 0.06 - Math.PI/2) + w/2;
+                const y1 = (r0) * Math.sin(roll - 0.06 - Math.PI/2) + h/2;
+                const x2 = (r0 + 10) * Math.cos(roll  - Math.PI/2) + w/2;
+                const y2 = (r0 + 10) * Math.sin(roll  - Math.PI/2) + h/2;
+                pfd_ctx.beginPath();
+                pfd_ctx.moveTo(x0, y0);
+                pfd_ctx.lineTo(x1, y1);
+                pfd_ctx.lineTo(x2, y2);
+                pfd_ctx.lineTo(x0, y0);
+                pfd_ctx.stroke();
+            }
+
             
             const desired_width = w/2.5;
             const ar = wings.height / wings.width;
