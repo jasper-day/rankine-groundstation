@@ -132,6 +132,7 @@ export class Line {
         ctx.closePath();
         ctx.fill();
 
+        /*
         const area_points = this.allowed_area_handle_points(viewer);
 
         ctx.fillStyle = "#ffff0050";
@@ -149,7 +150,7 @@ export class Line {
             ctx.beginPath();
             ctx.arc(pos.x, pos.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
             ctx.fill();
-        }
+        }*/
     }
 
     allowed_area_handle_points(v: Viewer): [Cartesian2, Cartesian2, Cartesian2, Cartesian2] {
@@ -463,7 +464,7 @@ export class Arc {
         this.draw_arc(ctx, viewer);
         this.draw_handle_points(ctx, viewer);
         this.draw_direction_arrow(ctx, viewer);
-        this.draw_allowed_region(ctx, viewer);
+        // this.draw_allowed_region(ctx, viewer);
     }
 }
 export function angle_delta(theta0: number, theta1: number): number {

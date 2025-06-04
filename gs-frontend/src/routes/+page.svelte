@@ -41,6 +41,7 @@
 
     import { Cartesian3, Ion, Math as CesiumMath, Terrain, Viewer, Cartesian2, Cartographic } from "cesium";
     import { Arc, HANDLE_POINT_RADIUS, Line, Local3, ORIGIN } from "$lib/geometry";
+    import { draw_horizon } from "$lib/pfd";
     import { ConnectionError, Network, ServerError } from "$lib/network";
     import "cesium/Build/Cesium/Widgets/widgets.css";
     import { onMount } from "svelte";
@@ -75,6 +76,23 @@
     let tool: "Line" | "Arc" | "Empty" = "Empty";
     let editing_mode: "Create" | "Edit" = "Create";
     let intermediate_point: Local3 | undefined = undefined;
+    const plane_points: Local3[] = [];
+
+    function draw_plane_points() {
+        if (!viewer || !ctx) return;
+        let prev = plane_points[0];
+        for (const p of plane_points) {
+            const a = viewer.scene.cartesianToCanvasCoordinates(prev.toCartesian(), scratchc3_a);
+            const b = viewer.scene.cartesianToCanvasCoordinates(p.toCartesian(), scratchc3_b);
+            ctx.strokeStyle = "yellow";
+            ctx.fillStyle = "#ffd040";
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+            prev = p;
+        }
+    }
 
     // to avoid instantiating objects continuously
     // may be premature optimisation but cesium does it so i will too
@@ -209,8 +227,10 @@
                     // some shape is being defined!! draw it
                     draw_intermediate_shape(viewer, intermediate_point, ctx);
                 }
+                draw_plane_points();
             }
-            draw_horizon();
+            if (pfd_ctx)
+                draw_horizon(pfd, pfd_ctx, 0.2, 0.3, 10.135, 39.136);
         });
 
         // Chrome doesn't support mouse events
@@ -470,165 +490,6 @@
         }
     }
 
-    import wings_src from "$lib/assets/wings.png";
-    const wings = new Image();
-    wings.src = wings_src;
-
-    function draw_horizon() {
-        if (pfd_ctx) {
-            pfd.width = pfd.clientWidth;
-            pfd.height = pfd.clientHeight;
-            let pitch = 0 / 180 * Math.PI;
-            let roll = 30 / 180 * Math.PI;
-
-            const w = pfd.width;
-            const h = pfd.height;
-            const pitchbar_height = 500;
-            const r = Math.max(w, h) + Math.PI * pitchbar_height;
-            const dx0 = r * Math.cos(Math.PI + roll);
-            const dy0 = r * Math.sin(Math.PI + roll);
-            const dx1 = r * Math.cos(roll)
-            const dy1 = r * Math.sin(roll)
-            const x0 = dx0 + w/2 + pitch * pitchbar_height * Math.sin(-roll);
-            const y0 = dy0 + h/2 + pitch * pitchbar_height * Math.cos(roll);
-            const x1 = dx1 + w/2 + pitch * pitchbar_height * Math.sin(-roll);
-            const y1 = dy1 + h/2 + pitch * pitchbar_height * Math.cos(roll);
-
-            const x3 = x0 - 2 * dy0;
-            const y3 = y0 + 2 * dx0;
-            const x2 = x1 - 2 * dy0;
-            const y2 = y1 + 2 * dx0;
-            const x5 = x0 + 2 * dy0;
-            const y5 = y0 - 2 * dx0;
-            const x4 = x1 + 2 * dy0;
-            const y4 = y1 - 2 * dx0;
-
-            pfd_ctx.fillStyle = "#ffffff";
-            pfd_ctx.strokeStyle = "#000000";
-            pfd_ctx.fillRect(0, 0, w, h);
-
-            pfd_ctx.fillStyle = "#5b93c5";
-            pfd_ctx.beginPath()
-            pfd_ctx.moveTo(x0, y0);
-            pfd_ctx.lineTo(x1, y1);
-            pfd_ctx.lineTo(x2, y2);
-            pfd_ctx.lineTo(x3, y3);
-            pfd_ctx.lineTo(x0, y0);
-            pfd_ctx.fill();
-
-            pfd_ctx.fillStyle = "#7d5233";
-            pfd_ctx.beginPath()
-            pfd_ctx.moveTo(x0, y0);
-            pfd_ctx.lineTo(x1, y1);
-            pfd_ctx.lineTo(x4, y4);
-            pfd_ctx.lineTo(x5, y5);
-            pfd_ctx.lineTo(x0, y0);
-            pfd_ctx.fill();
-
-            pfd_ctx.strokeStyle = "#ffffff";
-            pfd_ctx.fillStyle = "#dddddd";
-            pfd_ctx.font = "20px sans-serif";
-            pfd_ctx.textBaseline = "middle";
-            for (let theta = -90; theta < 90; theta += 2.5) {
-                let bar_len = 20;
-                if (Math.abs(theta) < 0.01) {
-                    bar_len = r * 2;
-                } else if (Math.abs(theta % 10) < 0.01) {
-                    bar_len = 80;
-                } else if (Math.abs(theta % 5) < 0.01) {
-                    bar_len = 40;
-                }
-                const pitch_adjust = (pitch + theta / 180 * Math.PI) * pitchbar_height;
-                const x0 = bar_len * Math.cos(Math.PI + roll) + w/2 + pitch_adjust * Math.sin(-roll);
-                const y0 = bar_len * Math.sin(Math.PI + roll) + h/2 + pitch_adjust * Math.cos(roll);
-                const x1 = bar_len * Math.cos(roll)           + w/2 + pitch_adjust * Math.sin(-roll);
-                const y1 = bar_len * Math.sin(roll)           + h/2 + pitch_adjust * Math.cos(roll);
-                pfd_ctx.beginPath();
-                pfd_ctx.moveTo(x0, y0);
-                pfd_ctx.lineTo(x1, y1);
-                pfd_ctx.stroke();
-                if (bar_len == 80) {
-                    pfd_ctx.save();
-                    pfd_ctx.translate(x0, y0);
-                    pfd_ctx.rotate(roll);
-                    pfd_ctx.fillText(Math.abs(theta).toString(), -30, 0);
-                    pfd_ctx.fillText(Math.abs(theta).toString(), bar_len * 2 + 5, 0);
-                    pfd_ctx.restore();
-                }
-            }
-
-
-            const x0_roll = w/2;
-            const y0_roll = h/2;
-            const roll_line_len = 15;
-            const roll_r = h/2 - 20;
-            const arrow_clearance = 10;
-
-            pfd_ctx.fillStyle = "#5b93c5";
-            pfd_ctx.beginPath();
-            {
-            const x1 = (roll_r - roll_line_len) * Math.cos(-40 / 180 * Math.PI -Math.PI/2) + x0_roll;
-            const y1 = (roll_r - roll_line_len) * Math.sin(-40 / 180 * Math.PI -Math.PI/2) + y0_roll;
-            pfd_ctx.moveTo(x1, y1);
-            }
-            for (let theta = -40; theta <= 40; theta += 10) {
-                const theta_rad = theta / 180 * Math.PI - Math.PI/2;
-                const x1 = (roll_r - roll_line_len - arrow_clearance) * Math.cos(theta_rad) + x0_roll;
-                const y1 = (roll_r - roll_line_len - arrow_clearance) * Math.sin(theta_rad) + y0_roll;
-                pfd_ctx.lineTo(x1, y1);
-            }
-            const y = (roll_r - roll_line_len) * Math.sin(40 / 180 * Math.PI - Math.PI/2) + y0_roll;
-            pfd_ctx.lineTo(w, y);
-            pfd_ctx.lineTo(w, 0);
-            pfd_ctx.lineTo(0, 0);
-            pfd_ctx.lineTo(0, y);
-            pfd_ctx.fill();
-
-            pfd_ctx.fillStyle = "#dddddd";
-
-            for (let theta = -40; theta <= 40; theta += 10) {
-                const theta_rad = theta / 180 * Math.PI - Math.PI/2;
-                const x0 = roll_r * Math.cos(theta_rad) + x0_roll;
-                const y0 = roll_r * Math.sin(theta_rad) + y0_roll;
-                const x1 = (roll_r - roll_line_len) * Math.cos(theta_rad) + x0_roll;
-                const y1 = (roll_r - roll_line_len) * Math.sin(theta_rad) + y0_roll;
-                pfd_ctx.beginPath();
-                pfd_ctx.moveTo(x0, y0);
-                pfd_ctx.lineTo(x1, y1);
-                pfd_ctx.stroke();
-
-                pfd_ctx.save();
-                pfd_ctx.translate(x0, y0);
-                pfd_ctx.rotate(theta_rad + Math.PI/2);
-                pfd_ctx.fillText(Math.abs(theta).toString(), -pfd_ctx.measureText(Math.abs(theta).toString()).width / 2, -10);
-                pfd_ctx.restore();
-            }
-
-            pfd_ctx.lineWidth = 2;
-            {
-                const r0 = roll_r - roll_line_len - arrow_clearance - 2;
-                const x0 = (r0) * Math.cos(roll + 0.06 - Math.PI/2) + w/2;
-                const y0 = (r0) * Math.sin(roll + 0.06 - Math.PI/2) + h/2;
-                const x1 = (r0) * Math.cos(roll - 0.06 - Math.PI/2) + w/2;
-                const y1 = (r0) * Math.sin(roll - 0.06 - Math.PI/2) + h/2;
-                const x2 = (r0 + 10) * Math.cos(roll  - Math.PI/2) + w/2;
-                const y2 = (r0 + 10) * Math.sin(roll  - Math.PI/2) + h/2;
-                pfd_ctx.beginPath();
-                pfd_ctx.moveTo(x0, y0);
-                pfd_ctx.lineTo(x1, y1);
-                pfd_ctx.lineTo(x2, y2);
-                pfd_ctx.lineTo(x0, y0);
-                pfd_ctx.stroke();
-            }
-
-            
-            const desired_width = w/2.5;
-            const ar = wings.height / wings.width;
-            const height = ar * desired_width;
-            const centre_x = 237 * desired_width / wings.width, centre_y = 10 * height / wings.height;
-            pfd_ctx.drawImage(wings, w/2 - centre_x, h/2 - centre_y, desired_width, height);
-        }
-    }
     let canvas: HTMLCanvasElement;
     let pfd: HTMLCanvasElement;
 </script>
@@ -659,7 +520,7 @@
     #pfd {
         position: absolute;
         width: 30%;
-        height: 512px;
+        height: 52%;
         top: 0;
         left: 0;
     }
