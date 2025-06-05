@@ -3,3 +3,7 @@ __pycache__/
 mpcc/acados_controller/c_generated_code
 mpcc/acados_controller/figures
 mpcc/acados_controller/pickled_data
+mpcc/acados_controller/computational_data_analysis/pickled_data
+mpcc/acados_controller/computational_data_analysis/pickled_data.zip
+mpcc/acados_controller/acados_ocp_fdm_2d.json
+mpcc/acados_controller/pt_self_intersection.json
