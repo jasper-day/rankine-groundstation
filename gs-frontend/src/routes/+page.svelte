@@ -6,9 +6,8 @@
     // canvas resizing
     // split path
     // reconnect to backend + show error
-    // line tangent to previous arc if applicable
-    // make regions C0 continuous
     // fix arrow rendering on arcs when in 3d mode
+    // fix plane indicator same problem as above
 
     // drag plane??
     // Jasper Day: Controller / frontend integration:
@@ -16,10 +15,8 @@
     // Controller sends information to the frontend in the form of
     // - list of positions over the next 6 seconds (continually updated)
     // - Current (simulated) position of the airplane
-    // Jasper Day: It would be very nice to visualize the position history of the airplaneand the projected position in real time as they're calculated by the controller / simulator (and then eventually from the airplane)
     // Jasper Day: So we need:
     // - A schema to pass this data back and forth (just some long arrays)
-    // - visualizations on the frontend
 
     // Jasper Day: idea (not final)
     // {
@@ -45,6 +42,8 @@
     import { ConnectionError, Network, ServerError } from "$lib/network";
     import "cesium/Build/Cesium/Widgets/widgets.css";
     import { onMount } from "svelte";
+    import SensorView from "$lib/SensorView.svelte";
+    import ROSLIB from "roslib";
 
     Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN;
 
@@ -70,6 +69,22 @@
         }
     }
 
+    let ros = new ROSLIB.Ros({
+        url: "ws://192.168.1.69:9090"
+    });
+    ros.on("connection", () => console.log("roslib connected"));
+    ros.on("error", (e) => console.log("roslib error", e));
+
+    let listener = new ROSLIB.Topic({
+        ros: ros,
+        name: "/mavlink/from",
+        messageType: "mavros_msgs/Mavlink",
+    });
+
+    listener.subscribe(function(message) {
+        console.log("Received ROS message", message);
+    });
+
     let viewer: Viewer | undefined;
     let ctx: CanvasRenderingContext2D | null = null;
     let pfd_ctx: CanvasRenderingContext2D | null = null;
@@ -77,21 +92,78 @@
     let editing_mode: "Create" | "Edit" = "Create";
     let intermediate_point: Local3 | undefined = undefined;
     const plane_points: Local3[] = [];
+    let data:
+        | {
+              t: number[];
+              u: number[];
+              x: [number, number, number, number, number, number, number][];
+              solX: number[][][];
+          }
+        | undefined = undefined;
+    fetch("/pt_self_intersection.json")
+        .then((res) => res.json())
+        .then((x) => (data = x));
+    fetch("/path_self_intersection.json")
+        .then((res) => res.json())
+        .then((x) => {
+            shapes = x.map((ds: any) => {
+                if (ds.type == "arc") {
+                    return Arc.deserialise(ds);
+                } else if (ds.type == "line") {
+                    return Line.deserialise(ds);
+    viewer.camera.cancelFlight();                }
+            });
+        });
 
     function draw_plane_points() {
         if (!viewer || !ctx) return;
-        let prev = plane_points[0];
-        for (const p of plane_points) {
-            const a = viewer.scene.cartesianToCanvasCoordinates(prev.toCartesian(), scratchc3_a);
+        if (plane_points.length == 0) return;
+        let a = viewer.scene.cartesianToCanvasCoordinates(plane_points[0].toCartesian(), scratchc3_a);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.strokeStyle = "red";
+        ctx.fillStyle = "#ffd040";
+        for (let i = 1; i < plane_points.length; i += 3) {
+            const p = plane_points[i];
             const b = viewer.scene.cartesianToCanvasCoordinates(p.toCartesian(), scratchc3_b);
-            ctx.strokeStyle = "yellow";
-            ctx.fillStyle = "#ffd040";
-            ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
-            ctx.stroke();
-            prev = p;
         }
+        a = viewer.scene.cartesianToCanvasCoordinates(plane_points[plane_points.length - 1].toCartesian(), scratchc3_a);
+        ctx.lineTo(a.x, a.y);
+        ctx.stroke();
+
+        ctx.strokeStyle = "blue";
+        ctx.fillStyle = "#ffd040";
+        a = viewer.scene.cartesianToCanvasCoordinates(future[0].toCartesian(), scratchc3_a);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        for (let i = 1; i < future.length; i += 3) {
+            const p = future[i];
+            const b = viewer.scene.cartesianToCanvasCoordinates(p.toCartesian(), scratchc3_b);
+            ctx.lineTo(b.x, b.y);
+        }
+        a = viewer.scene.cartesianToCanvasCoordinates(future[future.length - 1].toCartesian(), scratchc3_a);
+        ctx.lineTo(a.x, a.y);
+        ctx.stroke();
+
+        ctx.strokeStyle = "#f00000";
+        ctx.fillStyle = "#ff4030";
+        const plane_pos = plane_points[plane_points.length - 1];
+        a = viewer.scene.cartesianToCanvasCoordinates(plane_pos.toCartesian(), scratchc3_a);
+        ctx.save();
+        ctx.translate(a.x, a.y);
+        ctx.rotate(curr_heading - Math.PI / 2);
+        ctx.beginPath();
+        const l = 10;
+        const w = 8;
+        ctx.moveTo(l, 0);
+        ctx.lineTo(-l, w);
+        ctx.lineTo(-l / 2, 0);
+        ctx.lineTo(-l, -w);
+        ctx.lineTo(l, 0);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
     }
 
     // to avoid instantiating objects continuously
@@ -146,10 +218,7 @@
 
     function draw_intermediate_shape(viewer: Viewer, intermediate_point: Local3, ctx: CanvasRenderingContext2D) {
         // TODO costly operation to undo later on...
-        const mouse_cartesian = viewer.camera.pickEllipsoid(
-            new Cartesian3(mouseX, mouseY),
-            viewer.scene.ellipsoid
-        );
+        const mouse_cartesian = viewer.camera.pickEllipsoid(new Cartesian3(mouseX, mouseY), viewer.scene.ellipsoid);
         if (!mouse_cartesian) return;
         const mouse_local = Local3.fromCartesian(mouse_cartesian);
         mouse_local.z = 100; // for now, we define the path always at 100m above surface
@@ -184,8 +253,13 @@
 
             Arc.from_tangent_and_points(tangent, p1, p2).draw(ctx, viewer);
         }
-        
     }
+    let t = 0;
+    let i = 0;
+    let roll = 0;
+    let roll_command = 0;
+    let future: Local3[] = [];
+    let curr_heading = 0;
 
     onMount(() => {
         // Initialize the Cesium Viewer in the HTML element with the `cesiumContainer` ID.
@@ -197,7 +271,7 @@
             timeline: false,
             animation: false,
             // selectionIndicator: false,
-            navigationInstructionsInitiallyVisible: false,
+            navigationInstructionsInitiallyVisible: false
         });
         ctx = canvas.getContext("2d");
         pfd_ctx = pfd.getContext("2d");
@@ -215,8 +289,12 @@
 
         viewer.clock.onTick.addEventListener((_: any) => {
             if (viewer && ctx) {
-                canvas.width = viewer.canvas.width;
-                canvas.height = viewer.canvas.height;
+                if (canvas.width != viewer.canvas.width) {
+                    canvas.width = viewer.canvas.width;
+                }
+                if (canvas.height != viewer.canvas.height) {
+                    canvas.height = viewer.canvas.height;
+                }
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 draw_tooltip(mouseX, mouseY);
                 for (const s of shapes) {
@@ -229,8 +307,36 @@
                 }
                 draw_plane_points();
             }
-            if (pfd_ctx)
-                draw_horizon(pfd, pfd_ctx, 0.2, 0.3, 10.135, 39.136);
+            if (pfd_ctx) draw_horizon(pfd, pfd_ctx, {pitch: 0.05, roll: roll, ias: 10.135, alt: 39.136, command_roll: roll_command, gs: 10.3513, ws: 314.3});
+
+            if (data !== undefined) {
+                if (data.t[i] <= t) {
+                    i++;
+                    if (i >= data.t.length) i = 0;
+                    if (i % 1 == 0) {
+                        for (const s of sensors) {
+                            const datas = s[1];
+                            const init = datas[0];
+                            const prev = datas[datas.length - 1];
+                            datas.push(prev + init * 0.05 * (Math.random() - 0.5));
+
+                        }
+                        sensors = sensors;
+                    }
+                    dg();
+                    let [north, east, xi, phi, phidot, phiref, s] = data.x[i];
+                    let command_phi = phiref;
+                    roll_command = -command_phi;
+                    roll = -phi;
+                    curr_heading = xi;
+                    future = [];
+                    for (let j = 0; j < 120; j++) {
+                        future.push(new Local3(data.solX[i][1][j], data.solX[i][0][j], 100));
+                    }
+                    plane_points.push(new Local3(east, north, 100));
+                }
+                t += 5.0 / 60;
+            }
         });
 
         // Chrome doesn't support mouse events
@@ -317,14 +423,14 @@
                             i += 1;
                         }
 
-                        const handle_points = s.allowed_region_handle_points(viewer);
-                        for (const p of handle_points) {
-                            if (Cartesian2.distanceSquared(p, mouse) < max_sq_dist) {
-                                drag_object = { shape_index: idx, point_index: i };
-                                break;
-                            }
-                            i += 1;
-                        }
+                        // const handle_points = s.allowed_region_handle_points(viewer);
+                        // for (const p of handle_points) {
+                        //     if (Cartesian2.distanceSquared(p, mouse) < max_sq_dist) {
+                        //         drag_object = { shape_index: idx, point_index: i };
+                        //         break;
+                        //     }
+                        //     i += 1;
+                        // }
                     }
                     idx += 1;
                 }
@@ -368,20 +474,15 @@
             close_path();
             editing_mode = "Edit";
         } else if (event.key == "1" && viewer) {
-            const pos_screen = new Cartesian2(viewer.scene.canvas.layerWidth / 2, viewer.scene.canvas.layerHeight / 2);
-            let pos_cartesian = viewer.camera.pickEllipsoid(pos_screen, viewer.scene.ellipsoid);
-            if (pos_cartesian === undefined) return;
-            let pos_cartographic = Cartographic.fromCartesian(pos_cartesian);
-            pos_cartographic.height = 1000;
+            viewer.camera.cancelFlight();
             viewer.camera.flyTo({
-                destination: Cartographic.toCartesian(pos_cartographic),
+                destination: Cartesian3.fromRadians(ORIGIN.longitude, ORIGIN.latitude, 1000),
                 orientation: {
                     heading: CesiumMath.toRadians(0.0),
                     pitch: CesiumMath.toRadians(-90.0)
                 },
                 duration: 0
             });
-            
         }
         draw_tooltip(mouseX, mouseY);
     }
@@ -395,7 +496,7 @@
             const cartesian = viewer.camera.pickEllipsoid(new Cartesian3(mouseX, mouseY), ellipsoid);
             if (!cartesian) return; // just ignore an invalid position
             let local = Local3.fromCartesian(cartesian);
-            local.z = 100;
+            local.z = 0;
             let s = shapes[drag_object.shape_index];
             if (s instanceof Line) {
                 if (drag_object.point_index == 0) {
@@ -421,8 +522,13 @@
                     // const p = s.get_screenspace_params(viewer);
                     // TODO maybe like idk, sqitch direcqtuion simetimes?
                     let a, b;
-                    if (drag_object.point_index == 1) (a = local), (b = s.get_endpoint_local("End"));
-                    else (b = local), (a = s.get_endpoint_local("Start"));
+                    if (drag_object.point_index == 1) {
+                        a = local;
+                        b = s.get_endpoint_local("End");
+                    } else {
+                        a = s.get_endpoint_local("Start");
+                        b = local;
+                    }
                     const r = Local3.distance(local, s.centre);
                     const new_s = Arc.from_centre_and_points(s.centre, a, b, s.dangle < 0 ? -1 : 1, r);
                     shapes[drag_object.shape_index] = new_s;
@@ -490,18 +596,44 @@
         }
     }
 
+    function gen_data(x: number): number[] {
+        let datas = [x];
+        for (let i = 0; i < Math.random() * 200; i++) {
+            const prev = datas[datas.length - 1];
+            datas.push(prev + x * 0.05 * (Math.random() - 0.5));
+        }
+        return datas;
+    }
+    let sensors: [string, number[], string][] = [
+        ["Current",      gen_data(13.3), "A"],
+        ["Voltage",      gen_data(44.4), "V"],
+        ["Power",        gen_data(1353), "W"],
+        ["RPM",          gen_data(1389), "rpm"],
+        ["Throttle",     gen_data(10), "%"],
+        ["Vibration",    gen_data(113), ""],
+        ["Ground speed", gen_data(10), "m/s"],
+        ["Wind speed",   gen_data(10.13), "m/s"],
+        ["GPS altitude", gen_data(35), "m"],
+        ["RSSI",         gen_data(10), "dBm"],
+    ];
+
+    let dg: () => void;
     let canvas: HTMLCanvasElement;
     let pfd: HTMLCanvasElement;
 </script>
-<canvas id="pfd" bind:this={pfd}></canvas>
+
+<div id="data">
+    <canvas id="pfd" bind:this={pfd}></canvas>
+    <SensorView {sensors} bind:draw_graphs={dg}/>
+</div>
 <canvas id="canvas" bind:this={canvas}></canvas>
 <div id="cesiumContainer"></div>
-<svelte:window on:keydown={keypress} on:mousemove|preventDefault={mousemove}/>
+<svelte:window on:keydown={keypress} on:mousemove|preventDefault={mousemove} />
 
 <style>
     #canvas {
         z-index: 2;
-        position:absolute;
+        position: absolute;
         pointer-events: none;
         width: 70%;
         height: 100%;
@@ -518,9 +650,17 @@
         left: 30%;
     }
     #pfd {
+        height: 52%;
+        min-height: 52%;
+        width: 100%;
+    }
+
+    #data {
+        display: flex;
+        flex-direction: column;
         position: absolute;
         width: 30%;
-        height: 52%;
+        height: 100%;
         top: 0;
         left: 0;
     }
