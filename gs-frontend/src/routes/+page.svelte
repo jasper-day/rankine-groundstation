@@ -70,7 +70,7 @@
     }
 
     let ros = new ROSLIB.Ros({
-        url: "ws://192.168.1.69:9090"
+        url: "ws://localhost:9090"
     });
     ros.on("connection", () => console.log("roslib connected"));
     ros.on("error", (e) => console.log("roslib error", e));
@@ -84,6 +84,37 @@
     listener.subscribe(function(message) {
         console.log("Received ROS message", message);
     });
+
+    var gpsPoseListener = new ROSLIB.Topic({
+        ros: ros,
+        name: "/ap/geopose/filtered",
+        messageType: "geographic_msgs/msg/GeoPoseStamped"
+    });
+
+    var currentLocation:
+        | {
+              header: {
+                  stamp: {
+                      sec: number;
+                      nanosec: number;
+                  };
+                  frame_id: string;
+              };
+              pose: {
+                  position: {
+                      latitude: number;
+                      longitude: number;
+                      altitude: number;
+                  };
+                  orientation: {
+                      x: number;
+                      y: number;
+                      z: number;
+                      w: number;
+                  };
+              };
+          }
+        | undefined = undefined;
 
     let viewer: Viewer | undefined;
     let ctx: CanvasRenderingContext2D | null = null;
@@ -100,20 +131,32 @@
               solX: number[][][];
           }
         | undefined = undefined;
-    fetch("/pt_self_intersection.json")
-        .then((res) => res.json())
-        .then((x) => (data = x));
-    fetch("/path_self_intersection.json")
-        .then((res) => res.json())
-        .then((x) => {
-            shapes = x.map((ds: any) => {
-                if (ds.type == "arc") {
-                    return Arc.deserialise(ds);
-                } else if (ds.type == "line") {
-                    return Line.deserialise(ds);
-    viewer.camera.cancelFlight();                }
-            });
-        });
+
+    // fetch("/pt_self_intersection.json")
+    //     .then((res) => res.json())
+    //     .then((x) => (data = x));
+    // fetch("/path_self_intersection.json")
+    //     .then((res) => res.json())
+    //     .then((x) => {
+    //         shapes = x.map((ds: any) => {
+    //             if (ds.type == "arc") {
+    //                 return Arc.deserialise(ds);
+    //             } else if (ds.type == "line") {
+    //                 return Line.deserialise(ds);
+    //             }
+    //         });
+    //     });
+
+    gpsPoseListener.subscribe(function (message) {
+        currentLocation = message;
+        const new_cartesian = Cartesian3.fromDegrees(
+            currentLocation?.pose.position.longitude,
+            currentLocation?.pose.position.latitude,
+            currentLocation?.pose.position.altitude
+        );
+        const new_point = Local3.fromCartesian(new_cartesian);
+        plane_points.push(new_point);
+    });
 
     function draw_plane_points() {
         if (!viewer || !ctx) return;
@@ -132,19 +175,19 @@
         ctx.lineTo(a.x, a.y);
         ctx.stroke();
 
-        ctx.strokeStyle = "blue";
-        ctx.fillStyle = "#ffd040";
-        a = viewer.scene.cartesianToCanvasCoordinates(future[0].toCartesian(), scratchc3_a);
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        for (let i = 1; i < future.length; i += 3) {
-            const p = future[i];
-            const b = viewer.scene.cartesianToCanvasCoordinates(p.toCartesian(), scratchc3_b);
-            ctx.lineTo(b.x, b.y);
-        }
-        a = viewer.scene.cartesianToCanvasCoordinates(future[future.length - 1].toCartesian(), scratchc3_a);
-        ctx.lineTo(a.x, a.y);
-        ctx.stroke();
+        // ctx.strokeStyle = "blue";
+        // ctx.fillStyle = "#ffd040";
+        // a = viewer.scene.cartesianToCanvasCoordinates(future[0].toCartesian(), scratchc3_a);
+        // ctx.beginPath();
+        // ctx.moveTo(a.x, a.y);
+        // for (let i = 1; i < future.length; i += 3) {
+        //     const p = future[i];
+        //     const b = viewer.scene.cartesianToCanvasCoordinates(p.toCartesian(), scratchc3_b);
+        //     ctx.lineTo(b.x, b.y);
+        // }
+        // a = viewer.scene.cartesianToCanvasCoordinates(future[future.length - 1].toCartesian(), scratchc3_a);
+        // ctx.lineTo(a.x, a.y);
+        // ctx.stroke();
 
         ctx.strokeStyle = "#f00000";
         ctx.fillStyle = "#ff4030";
