@@ -9,10 +9,10 @@ authors = [
 requires-python = ">=3.10"
 dependencies = [
     "numpy",
-    "drake<0.1",
     "acados-template",
     "pydantic>=2.10.6",
     "toml>=0.10.2",
+    "jax>=0.6.1",
 ]
 
 [[tool.uv.index]]
@@ -42,6 +42,8 @@ dev = [
     "matplotlib>=3.10.1",
     "pytest>=8.3.5",
     "pytest-repeat>=0.9.3",
+    "scikit-build-core>=0.11.0",
+    "setuptools>=80.9.0",
 ]
 
 [tool.scikit-build]

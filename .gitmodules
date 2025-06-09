@@ -1,3 +1,6 @@
 [submodule "mpcc/external/acados"]
 	path = mpcc/external/acados
 	url = https://github.com/acados/acados.git
+[submodule "mpcc/external/eigen"]
+	path = mpcc/external/eigen
+	url = https://gitlab.com/libeigen/eigen/

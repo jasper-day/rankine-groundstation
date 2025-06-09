@@ -1,40 +1,33 @@
-#include "dubins_solver.h"
-
+#include <functional>
 #include <iostream>
 
 #include <Eigen/Dense>
 #include <Eigen/SparseCore>
 #include <Eigen/SparseQR>
-#include <drake/common/autodiff.h>
-#include <drake/math/autodiff_gradient.h>
-#include <drake/math/jacobian.h>
+#include <pybind11/eigen.h>
+#include <pybind11/functional.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 
-#include "dubins_path.h"
+struct SolverResult {
+  Eigen::VectorXd const params;
+  bool const converged;
+};
 
-Eigen::MatrixXd mpcc::dubins::DubinsSolver::jac(DubinsPath<double>& path,
-                                                drake::VectorX<double> params) {
-  DubinsPath<drake::AutoDiffXd> differentiable_path{path};
+struct SolverConfig {
+  int debug;
+  int max_iter;
+  bool line_search;
+  double tolerance;
+};
 
-  auto constraint_residuals = [&](const auto& x) {
-    using Scalar = typename std::remove_reference_t<decltype(x)>::Scalar;
-    if constexpr (std::is_same_v<Scalar, double>) {
-      return path.get_constraint_residuals(x);
-    } else {
-      // cast to AutoDiffXd
-      drake::VectorX<drake::AutoDiffXd> x_ad =
-          x.template cast<drake::AutoDiffXd>();
-      return differentiable_path.get_constraint_residuals(x_ad);
-    }
-  };
+typedef Eigen::Ref<Eigen::VectorXd const> RefVector;
+typedef Eigen::Ref<Eigen::MatrixXd const> RefMatrix;
 
-  auto jac = drake::math::jacobian(constraint_residuals, params);
-
-  return drake::math::ExtractGradient(jac);
-}
-
-mpcc::dubins::SolverResult mpcc::dubins::DubinsSolver::solve(
-    mpcc::dubins::DubinsPath<double>& path,
-    const std::vector<bool>& dragged_points) {
+SolverResult solve(
+    SolverConfig const& config, RefVector const& p_start,
+    std::function<RefVector const(const Eigen::VectorXd&)> residual_fn,
+    std::function<RefMatrix const(const Eigen::VectorXd&)> jacobian_fn) {
   /* Based on the solver from SolveSpace.
    * See: src/system.cpp in SolveSpace repository
    *
@@ -83,26 +76,27 @@ mpcc::dubins::SolverResult mpcc::dubins::DubinsSolver::solve(
    * @todo debug convergence errors
    *
    */
-
   using Eigen::Index;
   using Eigen::SparseMatrix;
+  using Eigen::VectorXd;
 
-  int n = path.n_params();
-  int m = path.n_constraints();
+  int n = p_start.size();
+  VectorXd B;
+  B = residual_fn(p_start);
+  int m = B.size();
 
-  if (debug_ >= 1) {
+  if (config.debug >= 1) {
     std::cout << "Solving optimization problem with " << n << " parameters and "
               << m << " constraints." << std::endl;
   }
 
   SparseMatrix<double> A;
-  drake::VectorX<double> B(m);
-  drake::VectorX<double> B_new(m);
-  drake::VectorX<double> z(m);
-  drake::VectorX<double> dx(n);
-  drake::VectorX<double> p_prev(n);
-  drake::VectorX<double> p_curr(n);
-  drake::VectorX<double> p_new(n);
+  VectorXd B_new(m);
+  VectorXd z(m);
+  VectorXd dx(n);
+  VectorXd p_curr(n);
+  VectorXd p_prev(n);
+  VectorXd p_new(n);
   Index i;
   Index j;
   double alpha;
@@ -110,31 +104,20 @@ mpcc::dubins::SolverResult mpcc::dubins::DubinsSolver::solve(
   bool line_search_step;
   bool converged = false;
   int iter = 0;
-  DubinsPath<drake::AutoDiffXd> differentiable_path{path};
-
-  auto constraint_residuals = [&](const auto& x) {
-    using Scalar = typename std::remove_reference_t<decltype(x)>::Scalar;
-    if constexpr (std::is_same_v<Scalar, double>) {
-      return path.get_constraint_residuals(x);
-    } else {
-      // cast to AutoDiffXd
-      drake::VectorX<drake::AutoDiffXd> x_ad =
-          x.template cast<drake::AutoDiffXd>();
-      return differentiable_path.get_constraint_residuals(x_ad);
-    }
-  };
-
-  p_curr = path.get_params();
+  p_curr = p_start;
 
   do {
     A.setZero();
     A.resize(m, n);
 
     // Dense
-    auto jac = drake::math::jacobian(constraint_residuals, p_curr);
-
-    B = drake::math::ExtractValue(jac);
-    A = drake::math::ExtractGradient(jac, n).sparseView();
+    try {
+      B = residual_fn(p_curr);
+      A = jacobian_fn(p_curr).sparseView();
+    } catch (const std::exception& e) {
+      throw std::runtime_error("Error in Python callback: " +
+                               std::string(e.what()));
+    }
 
     // TODO
     // // Rescale A according to dragging
@@ -166,12 +149,12 @@ mpcc::dubins::SolverResult mpcc::dubins::DubinsSolver::solve(
 
     p_prev = p_curr;
     // Line search
-    if (line_search_) {
+    if (config.line_search) {
       alpha = 1.0;
       line_search_step = false;
       for (line_search_iter = 0; line_search_iter < 10; ++line_search_iter) {
         p_new = p_curr + alpha * dx;
-        B_new = path.get_constraint_residuals(p_new);
+        B_new = residual_fn(p_new);
         if (B_new.array().pow(2).sum() < B.array().pow(2).sum()) {
           line_search_step = true;
           p_curr = p_new;
@@ -189,12 +172,12 @@ mpcc::dubins::SolverResult mpcc::dubins::DubinsSolver::solve(
     // Check for convergence
     // All constraint values should be zero
     converged = true;
-    if (B.cwiseAbs().sum() >= tolerance_) {
+    if (B.cwiseAbs().sum() >= config.tolerance) {
       converged = false;
     }
 
     // debug information
-    if ((debug_ >= 2) || (debug_ >= 1 && iter % 5 == 0)) {
+    if ((config.debug >= 2) || (config.debug >= 1 && iter % 5 == 0)) {
       using std::cout;
       cout << "Iteration number " << iter << "\n";
       cout << "Current residuals\n" << B << "\n";
@@ -204,7 +187,7 @@ mpcc::dubins::SolverResult mpcc::dubins::DubinsSolver::solve(
 
   } while (
       // copy loop criteria from SolveSpace
-      iter++ < max_iter_ && !converged);
+      iter++ < config.max_iter && !converged);
   // NEWTON ITERATION LOOP END
 
   // if (!converged) {
@@ -220,4 +203,24 @@ mpcc::dubins::SolverResult mpcc::dubins::DubinsSolver::solve(
 
   SolverResult result{p_curr, converged};
   return result;
+}
+
+namespace py = pybind11;
+
+PYBIND11_MODULE(cpp_solve, m) {
+  m.doc() = "Python bindings for Dubins path solver";
+
+  py::class_<SolverResult>(m, "SolverResult")
+      .def_readonly("params", &SolverResult::params)
+      .def_readonly("converged", &SolverResult::converged);
+
+  py::class_<SolverConfig>(m, "SolverConfig")
+      .def(py::init<int, int, bool, double>())
+      .def_readwrite("debug", &SolverConfig::debug)
+      .def_readwrite("max_iter", &SolverConfig::max_iter)
+      .def_readwrite("tolerance", &SolverConfig::tolerance)
+      .def_readwrite("line_search", &SolverConfig::line_search);
+
+  m.def("solve", &solve, py::arg("config"), py::arg("p_start"),
+        py::arg("residual_fn"), py::arg("jacobian_fn"));
 }
