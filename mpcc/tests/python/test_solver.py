@@ -2,6 +2,7 @@ from mpcc.pydubins import DubinsPath, LineSegment, CircularSegment, DubinsSolver
 from pytest import approx
 import numpy as np
 import pytest
+import jax
 
 from test_pydubins import create_test_segments
 
@@ -21,7 +22,6 @@ def test_solver_no_perturbation():
 @pytest.mark.repeat(2)
 def test_solver_random_perturbation():
     original_params = path.get_params()
-
     perturb = np.random.uniform(-1e-2, 1e-2, size=len(original_params))
     perturbed_params = original_params + perturb
 
@@ -55,7 +55,8 @@ def test_solver_debug():
 
 
 def test_jacobian():
-    curr_params = path.get_params()
+    curr_params = jax.device_get(path.get_params()).copy()
+    assert type(curr_params) is np.ndarray
     eps = 1e-6
     f0 = path.get_constraint_residuals(curr_params)
     n = path.n_params()
@@ -63,13 +64,13 @@ def test_jacobian():
     # centered finite difference approximation for Jacobian
     jac = np.zeros((m, n))
     for i in range(n):
-        x_eps = curr_params.copy()
-        x_eps[i] += eps
-        x_eps_neg = curr_params.copy()
-        x_eps_neg[i] -= eps
-        f_eps = path.get_constraint_residuals(x_eps)
-        f_eps_neg = path.get_constraint_residuals(x_eps_neg)
+        curr_params[i] += eps
+        f_eps = path.get_constraint_residuals(curr_params)
+        curr_params[i] -= eps
+        curr_params[i] -= eps
+        f_eps_neg = path.get_constraint_residuals(curr_params)
+        curr_params[i] += eps
         jac[:, i] = (f_eps - f_eps_neg) / eps / 2
-    jac_analytic = solver.jac(path, path.get_params())
-    assert jac_analytic.shape == (m, n)
-    assert jac_analytic == approx(jac, abs=1e-4)
+    jac_analytic = solver.jac(path, curr_params)
+    assert jac_analytic.shape == jac.shape
+    assert jac == approx(jax.device_get(jac_analytic), rel=1e-4)

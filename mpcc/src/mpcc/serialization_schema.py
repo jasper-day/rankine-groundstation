@@ -16,7 +16,7 @@ with open("example_path.json") as f:
 from pydantic import BaseModel, TypeAdapter, Discriminator
 from typing import Literal, Union
 from typing_extensions import Annotated
-from mpcc.pydubins import (
+from pydubins import (
     DubinsPath,
     LineSegment,
     CircularSegment,

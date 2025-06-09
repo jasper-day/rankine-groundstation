@@ -1,4 +1,4 @@
-from mpcc.pydubins import DubinsPath, SegmentType, Segment
+from pydubins import DubinsPath, SegmentType, Segment
 import numpy as np
 
 

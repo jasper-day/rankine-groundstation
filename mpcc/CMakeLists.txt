@@ -7,24 +7,18 @@ project(mpcc LANGUAGES CXX)
 # does not need X11.
 option(RUN_X11_TESTS "Run tests that require X11" OFF)
 
-
-find_package(drake CONFIG REQUIRED)
-
 if(DEFINED ENV{VIRTUAL_ENV})
   set(Python3_ROOT_DIR $ENV{VIRTUAL_ENV})
   message(STATUS "Using Python from virtual environment: $ENV{VIRTUAL_ENV}")
 endif()
 
-find_package(Python3 ${drake_PYTHON_VERSION} EXACT REQUIRED COMPONENTS Interpreter Development)
+find_package(Python3 COMPONENTS Interpreter Development)
+
+find_package(Eigen3 REQUIRED)
 
 if(DEFINED ENV{VIRTUAL_ENV})
   list(APPEND CMAKE_PREFIX_PATH "$ENV{VIRTUAL_ENV}")
 endif()
-
-get_filename_component(DRAKE_PYTHONPATH
-  "${drake_DIR}/../../python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/site-packages"
-  REALPATH
-)
 
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD 20)
@@ -32,75 +26,36 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 set(DUBINS_SOURCES 
-    src/cpp/lib/dubins_segment.cc
-    src/cpp/lib/dubins_path.cc
     src/cpp/lib/dubins_solver.cc
 )
-
-set(CONTROLLER_SOURCES
-    src/cpp/lib/dynamics.cc
-    src/cpp/lib/drake_dynamic_systems.cc
-)
-
-# Create dubins library
-add_library(dubins SHARED ${DUBINS_SOURCES})
-add_library(controller SHARED ${CONTROLLER_SOURCES})
-
-target_include_directories(dubins
-    PUBLIC src/cpp/include
-    PUBLIC ${drake_INCLUDE_DIRS}
-)
-
-target_include_directories(controller
-    PUBLIC src/cpp/include
-    PUBLIC ${drake_INCLUDE_DIRS}
-)
-
-target_link_libraries(dubins PRIVATE drake::drake)
-target_link_directories(dubins PRIVATE ${drake_LIBRARY_DIRS})
-target_link_libraries(controller PRIVATE drake::drake)
-target_link_directories(controller PRIVATE ${drake_LIBRARY_DIRS})
 
 # Add bindings
 find_package(pybind11 CONFIG REQUIRED)
 
-set(PYDUBINS_SOURCES ${DUBINS_SOURCES}  ${CONTROLLER_SOURCES} src/cpp/bindings/dubins_py.cc)
-
-pybind11_add_module(pydubins MODULE ${PYDUBINS_SOURCES})
-target_link_libraries(pydubins PRIVATE drake::drake dubins controller)
-target_link_directories(pydubins PRIVATE ${drake_LIBRARY_DIRS})
-target_include_directories(pydubins PUBLIC 
+pybind11_add_module(cpp_solve MODULE ${DUBINS_SOURCES})
+target_link_libraries(cpp_solve PRIVATE Eigen3::Eigen)
+target_include_directories(cpp_solve PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${drake_INCLUDE_DIRS}
 )
 
 # Set the output name to match the Python import
-set_target_properties(pydubins PROPERTIES
+set_target_properties(cpp_solve PROPERTIES
     PREFIX ""
     SUFFIX ".so"
 )
 
-install(TARGETS pydubins 
-  LIBRARY DESTINATION "${SKBUILD_PROJECT_NAME}")
+# Install entire Python package directory
+install(DIRECTORY "src/${SKBUILD_PROJECT_NAME}/" 
+        DESTINATION "${SKBUILD_PROJECT_NAME}"
+        FILES_MATCHING PATTERN "*.py" PATTERN "*.pyi"
+        PATTERN "__pycache__" EXCLUDE)
 
-# main code lives here, including library definitions. Edit library definitions in src/cpp/CMakeLists.txt
-# add_subdirectory(tests)
-
-# Install pure-python files
-file(GLOB_RECURSE PYTHON_SOURCES "src/${SKBUILD_PROJECT_NAME}/*.py")
-file(GLOB_RECURSE PYTHON_STUBS "src/${SKBUILD_PROJECT_NAME}/*.pyi")
-
-install(FILES ${PYTHON_SOURCES} ${PYTHON_STUBS} DESTINATION ${SKBUILD_PROJECT_NAME})
+install(TARGETS cpp_solve 
+        LIBRARY DESTINATION "${SKBUILD_PROJECT_NAME}/pydubins")
 
 # ---
 # testing
 
 if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
   include(CTest)
-endif()
-
-# third party defines google test gtest
-if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
-  add_subdirectory(third_party)
-  add_subdirectory(tests)
 endif()
