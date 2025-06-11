@@ -36,14 +36,35 @@
     // soft disable regions
     import "cesium/Build/Cesium/Widgets/widgets.css";
 
-    import { Cartesian3, Ion, Math as CesiumMath, Terrain, Viewer, Cartesian2, Cartographic } from "cesium";
-    import { Arc, HANDLE_POINT_RADIUS, Line, Local3, ORIGIN } from "$lib/geometry";
+    import {
+        Cartesian3,
+        Ion,
+        Math as CesiumMath,
+        Terrain,
+        Viewer,
+        Cartesian2,
+        Cartographic,
+        Ellipsoid,
+        Geometry
+    } from "cesium";
+    import { Arc, HANDLE_POINT_RADIUS, Line, Local3, ORIGIN, quaternion_to_RPY } from "$lib/geometry";
     import { draw_horizon } from "$lib/pfd";
     import { ConnectionError, Network, ServerError } from "$lib/network";
     import "cesium/Build/Cesium/Widgets/widgets.css";
     import { onMount } from "svelte";
     import SensorView from "$lib/SensorView.svelte";
     import ROSLIB from "roslib";
+    import {
+        MavrosMsgs,
+        MpccInterfaces,
+        SensorMsgs,
+        type GeographicMsgs,
+        type GeometryMsgs,
+        type StdMsgs,
+        type StdSrvs
+    } from "$lib/rostypes/ros_msgs";
+    import { open_ros } from "$lib/mavros";
+    import { nonpassive } from "svelte/legacy";
 
     Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN;
 
@@ -69,52 +90,197 @@
         }
     }
 
-    let ros = new ROSLIB.Ros({
-        url: "ws://localhost:9090"
-    });
-    ros.on("connection", () => console.log("roslib connected"));
-    ros.on("error", (e) => console.log("roslib error", e));
+    interface IMavData {
+        batteryData?: SensorMsgs.BatteryState;
+        state?: MavrosMsgs.State;
+        wind?: GeometryMsgs.TwistWithCovarianceStamped;
+        estimatorStatus?: MavrosMsgs.EstimatorStatus;
+        compassHeading?: StdMsgs.Float64;
+        relAltitude?: StdMsgs.Float64;
+        gpsFix?: SensorMsgs.NavSatFix;
+        localPose?: GeometryMsgs.PoseStamped;
+        imuData?: SensorMsgs.Imu;
+    }
 
-    let listener = new ROSLIB.Topic({
-        ros: ros,
-        name: "/mavlink/from",
-        messageType: "mavros_msgs/Mavlink",
-    });
+    let mavData: IMavData = {};
 
-    listener.subscribe(function(message) {
-        console.log("Received ROS message", message);
-    });
+    let mavDataHistory: IMavData[] = [];
 
-    var gpsPoseListener = new ROSLIB.Topic({
-        ros: ros,
-        name: "/ap/geopose/filtered",
-        messageType: "geographic_msgs/msg/GeoPoseStamped"
-    });
+    let mavSources: { name: string; interface: string; target: string }[] = [
+        { name: "/mavros/battery", interface: "sensor_msgs/msg/BatteryState", target: "batteryData" },
+        { name: "/mavros/state", interface: "mavros_msgs/msg/State", target: "state" },
+        {
+            name: "/mavros/wind_estimation",
+            interface: "geometry_msgs/msg/TwistWithCovarianceStamped",
+            target: "wind"
+        },
+        // { This one is not super duper helpful
+        //     name: "/mavros/estimator_status",
+        //     interface: "mavros_msgs/msg/EstimatorStatus",
+        //     target: "estimatorStatus"
+        // },
+        {
+            name: "/mavros/local_position/pose",
+            interface: "geometry_msgs/msg/PoseStamped",
+            target: "localPose"
+        },
+        {
+            name: "/mavros/global_position/compass_hdg",
+            interface: "std_msgs/msg/Float64",
+            target: "compassHeading"
+        },
+        { name: "/mavros/global_position/rel_alt", interface: "std_msgs/msg/Float64", target: "relAltitude" },
+        { name: "/mavros/global_position/global", interface: "sensor_msgs/msg/NavSatFix", target: "gpsFix" },
+        { name: "/mavros/imu/data", interface: "sensor_msgs/msg/Imu", target: "imuData" }
+    ];
 
-    var currentLocation:
-        | {
-              header: {
-                  stamp: {
-                      sec: number;
-                      nanosec: number;
-                  };
-                  frame_id: string;
-              };
-              pose: {
-                  position: {
-                      latitude: number;
-                      longitude: number;
-                      altitude: number;
-                  };
-                  orientation: {
-                      x: number;
-                      y: number;
-                      z: number;
-                      w: number;
-                  };
-              };
-          }
-        | undefined = undefined;
+    function updateStatusText(message: MavrosMsgs.StatusText) {
+        const statusTextContainer = document.getElementById("status-message-container");
+        // check if at bottom; scroll down if so
+        if (statusTextContainer) {
+            const isAtBottom =
+                statusTextContainer.scrollHeight - statusTextContainer.clientHeight <=
+                statusTextContainer.scrollTop + 1;
+            const messagePar = document.createElement("p");
+            let classes: string[] = ["text-xs"];
+            switch (message.severity) {
+                case MavrosMsgs.StatusTextSeverity.EMERGENCY:
+                    classes.push("text-red", "font-bold");
+                    break;
+                case MavrosMsgs.StatusTextSeverity.ALERT:
+                    classes.push("text-red");
+                    break;
+                case MavrosMsgs.StatusTextSeverity.CRITICAL:
+                    classes.push("text-red", "font-bold");
+                    break;
+                case MavrosMsgs.StatusTextSeverity.ERROR:
+                    classes.push("text-red");
+                    break;
+                case MavrosMsgs.StatusTextSeverity.WARNING:
+                    classes.push("text-orange");
+                    break;
+                case MavrosMsgs.StatusTextSeverity.NOTICE:
+                    classes.push("text-yellow");
+                case MavrosMsgs.StatusTextSeverity.INFO:
+                    classes.push("text-white/90");
+                case MavrosMsgs.StatusTextSeverity.DEBUG:
+                    classes.push("text-white/90");
+            }
+            messagePar.classList.add(...classes);
+            messagePar.innerText = message.text;
+            statusTextContainer.appendChild(messagePar);
+            if (isAtBottom) {
+                // scroll to bottom of element
+                statusTextContainer.scrollTop = statusTextContainer.scrollHeight;
+            }
+        }
+    }
+
+    let statusListener: ROSLIB.Topic | null = null,
+        armVehicle: ROSLIB.Service | null = null,
+        setPathService: ROSLIB.Service | null = null;
+
+    function onRosConnect() {
+        console.log("roslib connected");
+        var preData = document.getElementById("pre-data");
+
+        mavSources.forEach((element) => {
+            const listener = new ROSLIB.Topic({ ros: ros, name: element.name, messageType: element.interface });
+            listener.subscribe(function (message) {
+                mavData[element.target] = message;
+            });
+        });
+
+        // periodically record history
+        setInterval(function () {
+            mavDataHistory.push(mavData);
+            if (mavDataHistory.length > 4096) {
+                mavDataHistory.unshift();
+            }
+        }, 20);
+
+        statusListener = new ROSLIB.Topic({
+            ros: ros,
+            name: "mavros/statustext/recv",
+            messageType: "mavros_msgs/msg/StatusText"
+        });
+        statusListener.subscribe(updateStatusText);
+
+        armVehicle = new ROSLIB.Service({
+            ros: ros,
+            name: "gs/try_arm",
+            serviceType: "std_srvs/srv/SetBool"
+        });
+
+        setPathService = new ROSLIB.Service({
+            ros: ros,
+            name: "gs/set_path",
+            serviceType: "mpcc_interfaces/srv/SetPath"
+        });
+    }
+
+    function enableArm(e: Event) {
+        if (armVehicle) {
+            const req: StdSrvs.SetBoolRequest = {
+                data: true
+            };
+            armVehicle.callService(req, function (result: StdSrvs.SetBoolResponse) {
+                console.log("Attempting arm");
+                console.log("Success", result.success);
+                console.log("Response", result.message);
+            });
+        }
+    }
+
+    function cancelArm(e: Event) {
+        if (armVehicle) {
+            const req: StdSrvs.SetBoolRequest = {
+                data: false
+            };
+            armVehicle.callService(req, function (result: StdSrvs.SetBoolResponse) {
+                console.log("Attempting disarm");
+                console.log("Success", result.success);
+                console.log("Response", result.message);
+            });
+        }
+    }
+
+    function sendPath(e: Event) {
+        if (setPathService) {
+            const origin: GeographicMsgs.GeoPoint = {
+                latitude: ORIGIN.latitude,
+                longitude: ORIGIN.longitude,
+                altitude: ORIGIN.height
+            };
+            let s_shapes = shapes.map((sh) => sh.serialise());
+            const path: MpccInterfaces.Path = {
+                newpath: JSON.stringify(s_shapes),
+                origin: origin
+            };
+            const req: MpccInterfaces.SetPathRequest = {
+                newpath: path
+            };
+            setPathService.callService(req, function (res: MpccInterfaces.SetPathResponse) {
+                console.log("Sent path");
+                console.log("Success", res.success);
+                console.log(res.error_msg);
+            });
+        }
+    }
+
+    var ros = open_ros(
+        "ws://localhost:9090",
+
+        onRosConnect,
+
+        function () {
+            console.log("Connection error.");
+        },
+
+        function () {
+            console.log("Connection closed");
+        }
+    );
 
     let viewer: Viewer | undefined;
     let ctx: CanvasRenderingContext2D | null = null;
@@ -147,16 +313,55 @@
     //         });
     //     });
 
-    gpsPoseListener.subscribe(function (message) {
-        currentLocation = message;
-        const new_cartesian = Cartesian3.fromDegrees(
-            currentLocation?.pose.position.longitude,
-            currentLocation?.pose.position.latitude,
-            currentLocation?.pose.position.altitude
+    function draw_mavHistory() {
+        if (!viewer || !ctx) return;
+        if (mavDataHistory.filter((element) => element.gpsFix != undefined).length < 2) return;
+
+        const cartesians = Cartesian3.fromDegreesArrayHeights(
+            mavDataHistory
+                .map((element) => {
+                    return element.gpsFix
+                        ? [element.gpsFix?.longitude, element.gpsFix?.latitude, element.gpsFix?.altitude]
+                        : [];
+                })
+                .flat(),
+            Ellipsoid.WGS84
         );
-        const new_point = Local3.fromCartesian(new_cartesian);
-        plane_points.push(new_point);
-    });
+
+        let a = viewer.scene.cartesianToCanvasCoordinates(cartesians[0], scratchc3_a);
+
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.strokeStyle = "red";
+        ctx.fillStyle = "#ffd040";
+        for (let i = 1; i < cartesians.length; i += 5) {
+            const b = viewer.scene.cartesianToCanvasCoordinates(cartesians[i], scratchc3_b);
+            ctx.lineTo(b.x, b.y);
+        }
+        a = viewer.scene.cartesianToCanvasCoordinates(cartesians[cartesians.length - 1], scratchc3_a);
+        ctx.lineTo(a.x, a.y);
+        ctx.stroke();
+
+        // draw that pointer thing
+        if (!mavData.compassHeading) return;
+        curr_heading = ((mavData.compassHeading?.data || 0.0) * Math.PI) / 180;
+        ctx.strokeStyle = "#f00000";
+        ctx.fillStyle = "#ff4030";
+        ctx.save();
+        ctx.translate(a.x, a.y);
+        ctx.rotate(curr_heading - Math.PI / 2);
+        ctx.beginPath();
+        const l = 10;
+        const w = 8;
+        ctx.moveTo(l, 0);
+        ctx.lineTo(-l, w);
+        ctx.lineTo(-l / 2, 0);
+        ctx.lineTo(-l, -w);
+        ctx.lineTo(l, 0);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+    }
 
     function draw_plane_points() {
         if (!viewer || !ctx) return;
@@ -214,8 +419,8 @@
     const scratchc3_a: Cartesian3 = new Cartesian3();
     const scratchc3_b: Cartesian3 = new Cartesian3();
 
-    let n = new Network();
-    n.connect().then(console.log); // TODO handle errors
+    //let n = new Network();
+    //n.connect().then(console.log); // TODO handle errors
 
     function make_line(start: Local3, prev_shape: Line | Arc | undefined, mouse_local: Local3): Line {
         let end;
@@ -348,9 +553,32 @@
                     // some shape is being defined!! draw it
                     draw_intermediate_shape(viewer, intermediate_point, ctx);
                 }
-                draw_plane_points();
+                draw_mavHistory();
             }
-            if (pfd_ctx) draw_horizon(pfd, pfd_ctx, {pitch: 0.05, roll: roll, ias: 10.135, alt: 39.136, command_roll: roll_command, gs: 10.3513, ws: 314.3});
+            if (pfd_ctx && mavData.localPose && mavData.relAltitude) {
+                const rpy = quaternion_to_RPY(mavData.localPose?.pose.orientation);
+                draw_horizon(pfd, pfd_ctx, {
+                    pitch: -rpy.pitch,
+                    roll: -rpy.roll,
+                    ias: 10.135,
+                    alt: mavData.relAltitude?.data,
+                    command_roll: roll_command,
+                    gs: 10.3513,
+                    ws: 314.3,
+                    heading: (curr_heading * 180) / Math.PI
+                });
+            }
+
+            // current, voltage, power, rpm, throttle, vibration, ground speed, wind speed, gps altitude, rssi
+            sensors[0][1].push(mavData.batteryData?.current || 0.0);
+            sensors[1][1].push(mavData.batteryData?.voltage || 0.0);
+            sensors[2][1].push(mavData.batteryData?.voltage || 0.0 * (mavData.batteryData?.current || 0.0));
+            sensors[7][1].push(
+                Math.sqrt(
+                    (mavData.wind?.twist.twist.linear.x || 0.0) ** 2 + (mavData.wind?.twist.twist.linear.y || 0.0) ** 2
+                )
+            );
+            sensors[8][1].push(mavData.gpsFix?.altitude || 0.0);
 
             if (data !== undefined) {
                 if (data.t[i] <= t) {
@@ -362,7 +590,6 @@
                             const init = datas[0];
                             const prev = datas[datas.length - 1];
                             datas.push(prev + init * 0.05 * (Math.random() - 0.5));
-
                         }
                         sensors = sensors;
                     }
@@ -647,17 +874,18 @@
         }
         return datas;
     }
+
     let sensors: [string, number[], string][] = [
-        ["Current",      gen_data(13.3), "A"],
-        ["Voltage",      gen_data(44.4), "V"],
-        ["Power",        gen_data(1353), "W"],
-        ["RPM",          gen_data(1389), "rpm"],
-        ["Throttle",     gen_data(10), "%"],
-        ["Vibration",    gen_data(113), ""],
+        ["Current", gen_data(13.3), "A"],
+        ["Voltage", gen_data(44.4), "V"],
+        ["Power", gen_data(1353), "W"],
+        ["RPM", gen_data(1389), "rpm"],
+        ["Throttle", gen_data(10), "%"],
+        ["Vibration", gen_data(113), ""],
         ["Ground speed", gen_data(10), "m/s"],
-        ["Wind speed",   gen_data(10.13), "m/s"],
+        ["Wind speed", gen_data(10.13), "m/s"],
         ["GPS altitude", gen_data(35), "m"],
-        ["RSSI",         gen_data(10), "dBm"],
+        ["RSSI", gen_data(10), "dBm"]
     ];
 
     let dg: () => void;
@@ -667,13 +895,25 @@
 
 <div id="data">
     <canvas id="pfd" bind:this={pfd}></canvas>
-    <SensorView {sensors} bind:draw_graphs={dg}/>
+    <div id="arm-button" class="flex-column flex">
+        <button class="btn btn-gray" on:click={enableArm}>Arm</button>
+        <button class="btn btn-gray" on:click={cancelArm}>Cancel Arm</button>
+        <button class="btn btn-gray" on:click={sendPath}>Send path</button>
+    </div>
+    <SensorView {sensors} bind:draw_graphs={dg} />
 </div>
 <canvas id="canvas" bind:this={canvas}></canvas>
 <div id="cesiumContainer"></div>
+<div class="fixed bottom-4 right-4 z-50 h-64 w-80 overflow-hidden rounded bg-black/70">
+    <div class="border-b border-white/20 p-3">
+        <h3 class="text-sm font-medium text-white">Messages</h3>
+    </div>
+    <div class="h-full space-y-2 overflow-y-auto p-3" id="status-message-container"></div>
+</div>
 <svelte:window on:keydown={keypress} on:mousemove|preventDefault={mousemove} />
 
-<style>
+<style lang="postcss">
+    @import "tailwindcss";
     #canvas {
         z-index: 2;
         position: absolute;
@@ -706,5 +946,17 @@
         height: 100%;
         top: 0;
         left: 0;
+    }
+
+    .btn {
+        @apply mx-4 my-2 rounded px-4 py-2 font-bold;
+    }
+
+    .btn-gray {
+        @apply bg-gray-300;
+    }
+
+    .btn-gray:hover {
+        @apply bg-gray-400;
     }
 </style>

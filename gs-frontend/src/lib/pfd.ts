@@ -247,6 +247,7 @@ interface PfdInfo {
     command_roll: number;
     gs: number;
     ws: number;
+    heading: number;
 }
 function draw_heading(ctx: Ctx, w: number, h: number, heading: number) {
     ctx.lineWidth = 1;
@@ -374,8 +375,8 @@ export function draw_horizon(pfd: HTMLCanvasElement, ctx: CanvasRenderingContext
         while (x > Math.PI) x -= Math.PI * 2;
         return x;
     }
-    const heading = clamp(t / 3) / Math.PI * 180;
-    draw_heading(ctx, w, h, heading);
+    // const heading = clamp(t / 3) / Math.PI * 180;
+    draw_heading(ctx, w, h, data.heading);
 
     // ctx.strokeStyle = "#ff00ff";
     // ctx.beginPath();

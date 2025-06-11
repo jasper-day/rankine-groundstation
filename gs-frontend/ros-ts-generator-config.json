@@ -10,6 +10,10 @@
             "path": "/opt/ros/humble/share/std_msgs"
         },
         {
+            "namespace": "std_srvs",
+            "path": "/opt/ros/humble/share/std_srvs"
+        },
+        {
             "namespace": "geometry_msgs",
             "path": "/opt/ros/humble/share/geometry_msgs"
         },
@@ -32,6 +36,11 @@
         {
             "namespace": "sensor_msgs",
             "path": "/opt/ros/humble/share/sensor_msgs"
+        },
+        {
+            "namespace": "mpcc_interfaces",
+            "path": "/home/groundstation/ardupilot_ws/install/mpcc_interfaces/share/mpcc_interfaces"
         }
+
     ]
 }

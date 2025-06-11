@@ -2,7 +2,10 @@ import { EcefToEnu, EnuToEcef } from "$lib/projection";
 import { Cartesian3, Cartographic, Viewer, Cartesian2 } from "cesium";
 
 // Some point at buckminster gliding club
-export const ORIGIN = Cartographic.fromDegrees(-0.7097051097617251, 52.830542659049435, 146 + 60); // approx airfield elevation ????
+// export const ORIGIN = Cartographic.fromDegrees(-0.7097051097617251, 52.830542659049435, 146 + 60); // approx airfield elevation ????
+
+// Holyrood Park
+export const ORIGIN = Cartographic.fromDegrees(-3.166666, 55.9525, 40);
 export const HANDLE_POINT_RADIUS = 4;
 const TRI_SIZE = 10;
 
@@ -11,6 +14,27 @@ const TRI_SIZE = 10;
 let scratchc3_a: Cartesian3 = new Cartesian3();
 let scratchc3_b: Cartesian3 = new Cartesian3();
 let scratchc2: Cartesian2 = new Cartesian2();
+
+export function quaternion_to_RPY(q: { w: number; x: number; y: number; z: number; }) {
+    // https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+    // https://github.com/rawify/Quaternion.js/blob/main/src/quaternion.js (order YPR)
+
+    const w = q.w, x = q.x, y = q.y, z = q.z;
+    const wx = w * x, wy = w * y, wz = w * z;
+    const xx = x * x, xy = x * y, xz = x * z;
+    const yy = y * y, yz = y * z, zz = z * z;
+
+    function asin(t: number) {
+        return t >= 1 ? Math.PI / 2 : (t <= -1 ? -Math.PI / 2 : Math.asin(t));
+    }
+
+    return {
+        yaw: Math.atan2(2 * (xy + wz), 1 - 2 * (yy + zz)), // Heading / Yaw
+        pitch: -asin(2 * (xz - wy)), // Attitude / Pitch
+        roll: Math.atan2(2 * (yz + wx), 1 - 2 * (xx + yy)), // Bank / Roll
+};
+}
+
 
 export class Local3 {
     _x: number;
@@ -171,11 +195,11 @@ export class Line {
             new Local3(b.x - norm.x * w1_l, b.y - norm.y * w1_l, b.z),
             new Local3(b.x + norm.x * w1_r, b.y + norm.y * w1_r, b.z)
         ].map((p) => v.scene.cartesianToCanvasCoordinates(p.toCartesian())) as [
-            Cartesian2,
-            Cartesian2,
-            Cartesian2,
-            Cartesian2
-        ];
+                Cartesian2,
+                Cartesian2,
+                Cartesian2,
+                Cartesian2
+            ];
     }
 
     serialise(): any {

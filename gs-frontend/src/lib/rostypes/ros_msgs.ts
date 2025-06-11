@@ -2585,6 +2585,70 @@ export namespace MavrosMsgs {
   }
 }
 
+export namespace MpccInterfaces {
+  export interface GetPath {
+    response: MpccInterfaces.GetPathResponse;
+  }
+
+  export interface GetPathResponse {
+    path: MpccInterfaces.Path;
+    error_msg: string;
+  }
+
+  export interface Path {
+    newpath: string;
+    origin: GeographicMsgs.GeoPoint;
+  }
+
+  export interface SetPath {
+    request: MpccInterfaces.SetPathRequest;
+    response: MpccInterfaces.SetPathResponse;
+  }
+
+  export interface SetPathRequest {
+    newpath: MpccInterfaces.Path;
+  }
+
+  export interface SetPathResponse {
+    success: boolean;
+    error_msg: string;
+  }
+
+  export interface State {
+    state: StateState;
+  }
+  
+  export enum StateState {
+    DISCONNECTED = 0,
+    CONNECTED = 1,
+    ARMING = 2,
+    ARMED = 3,
+    SET_AUTO = 4,
+    TAKING_OFF = 5,
+    WP_FOLLOW = 6,
+    MPCC = 7,
+    LANDING = 8,
+    FTS = 254,
+    TIMEOUT = 255,
+  }
+
+  export interface Status {
+    connected: boolean;
+    armed: boolean;
+    mode: string;
+    path_set: boolean;
+    last_transition_time: { sec: number, nanosec: number };
+    state: MpccInterfaces.State;
+  }
+
+  export interface TrajectoryPlan {
+    norths: number[];
+    easts: number[];
+    headings: number[];
+    bank_angles: number[];
+  }
+}
+
 export namespace RclInterfaces {
   export enum ParameterTypeConst {
     PARAMETER_NOT_SET = 0,
@@ -3207,6 +3271,31 @@ export namespace StdMsgs {
   export interface UInt8MultiArray {
     layout: StdMsgs.MultiArrayLayout;
     data: number[];
+  }
+}
+
+export namespace StdSrvs {
+  export interface SetBool {
+    request: StdSrvs.SetBoolRequest;
+    response: StdSrvs.SetBoolResponse;
+  }
+
+  export interface SetBoolRequest {
+    data: boolean;
+  }
+
+  export interface SetBoolResponse {
+    success: boolean;
+    message: string;
+  }
+
+  export interface Trigger {
+    response: StdSrvs.TriggerResponse;
+  }
+
+  export interface TriggerResponse {
+    success: boolean;
+    message: string;
   }
 }
 
