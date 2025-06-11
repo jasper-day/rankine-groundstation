@@ -1,0 +1,37 @@
+{
+    "output": "src/lib/rostypes/ros_msgs.ts",
+    "rosVersion": 2,
+    "typePrefix": "",
+    "useNamespaces": true,
+    "smartEnums": true,
+    "input": [
+        {
+            "namespace": "std_msgs",
+            "path": "/opt/ros/humble/share/std_msgs"
+        },
+        {
+            "namespace": "geometry_msgs",
+            "path": "/opt/ros/humble/share/geometry_msgs"
+        },
+        {
+            "namespace": "geographic_msgs",
+            "path": "/opt/ros/humble/share/geographic_msgs"
+        },
+        {
+            "namespace": "unique_identifier_msgs",
+            "path": "/opt/ros/humble/share/unique_identifier_msgs"
+        },
+        {
+            "namespace": "rcl_interfaces",
+            "path": "/opt/ros/humble/share/rcl_interfaces"
+        },
+        {
+            "namespace": "mavros_msgs",
+            "path": "/opt/ros/humble/share/mavros_msgs"
+        },
+        {
+            "namespace": "sensor_msgs",
+            "path": "/opt/ros/humble/share/sensor_msgs"
+        }
+    ]
+}
