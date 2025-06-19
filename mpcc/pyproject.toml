@@ -14,18 +14,14 @@ dependencies = [
     "toml>=0.10.2",
     "jax>=0.6.1",
     "pymavlink>=2.4.47",
+    "pygeodesy>=25.5.28",
+    "immutabledict>=4.2.1",
 ]
 
-[[tool.uv.index]]
-# nightly packages
-name = "drake"
-url = "https://drake-packages.csail.mit.edu/whl/nightly/"
 
 [tool.uv.sources]
 acados-template = { path = "external/acados/interfaces/acados_template" }
 
-[tool.pip]
-extra-index-url = ["https://drake-packages.csail.mit.edu/whl/nightly/"]
 
 [project.optional-dependencies]
 dev = [

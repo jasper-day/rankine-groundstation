@@ -101,11 +101,20 @@ class DubinsPath:
 
     def get_closest_arclength(self, pos: Vec2, estimated_arclength: float):
         "Find the arclength to a given point closest to the estimated arclength"
-        pass
-
-    def get_true_arclength(self, pos: Vec2):
-        "Find the arclength closest to a given point"
-        pass
+        arclength_prev = 0.0
+        closest_arclength = 0.0
+        closest_delta = jnp.inf
+        for segment in self._segments:
+            # please lord let it not be O(N^2)
+            possibles = segment.possible_arclengths(pos)
+            for possible in possibles:
+                arclength = arclength_prev + possible
+                delta = jnp.abs(estimated_arclength - arclength)
+                if delta < closest_delta:
+                    closest_arclength = arclength
+                    closest_delta = delta
+            arclength_prev += segment.length()
+        return closest_arclength
 
     def offset_path(self, offset: float):
         "Return a new path, offset by an amount"

@@ -12,7 +12,7 @@ from casadi import (
 import numpy as np
 from mpcc.pydubins import DubinsPath
 from typing import Any
-from path_utils import get_spline_MX
+from mpcc.path_utils import get_spline_MX
 
 
 def export_mpcc_controller(

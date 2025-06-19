@@ -72,6 +72,9 @@ class Segment:
     def from_offset(self, offset: float):
         "Create a new, offset segment"
         raise NotImplementedError()
+    
+    def possible_arclengths(self, position: jnp.ndarray) -> list[float]:
+        raise NotImplementedError()
 
 
 class LineSegment(Segment):
@@ -145,7 +148,12 @@ class LineSegment(Segment):
         # perpendicular to the left
         perp = jnp.array([AB[1] * offset, -AB[0] * offset])
         return LineSegment(self.start() + perp, self.end() + perp)
-
+    
+    def possible_arclengths(self, position):
+        # only one possible arclength for a line segment
+        AB = self.end() - self.start()
+        AB /= jnp.linalg.norm(AB)
+        return [AB.dot(position - self.start())]
 
 class CircularSegment(Segment):
     "A circular arc"
@@ -153,8 +161,8 @@ class CircularSegment(Segment):
     type = SegmentType.CIRCULARSEGMENT
     n_params = 5
 
-    def __init__(self, center: Vec2, radius: float, heading: float, arclength: float):
-        self._center = center
+    def __init__(self, centre: Vec2, radius: float, heading: float, arclength: float):
+        self._center = centre
         self._radius = radius
         self._heading = heading
         self._arclength = arclength
@@ -237,3 +245,21 @@ class CircularSegment(Segment):
             self._heading,
             self._arclength * (1 + offset * self._dir() / self._radius),
         )
+    
+    def possible_arclengths(self, position):
+        # family of possible arclengths for a circular segment
+        # noting that it could wrap onto itself multiple times...
+        R = position - self._center
+        phi = jnp.atan2(R[1], R[0])
+        th = phi - self._heading
+        arclength = th * self._radius
+        # find every possible arclength
+        circumference = 2 * jnp.pi * self._radius
+        length = jnp.abs(self._arclength)
+        possibles = []
+        ll = arclength - circumference
+        while (ll < length):
+            if ll > 0:
+                possibles.append(float(ll))
+            ll += circumference
+        return possibles

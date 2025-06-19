@@ -1,0 +1,84 @@
+dt = 0.1
+N_horizon = 120
+controller = "pt"
+simulator = false
+
+[model]
+
+# dynamic roll parameters
+b0 = 11.56
+a0 = 11.56
+a1 = 5.44
+# gravity
+g = 9.81
+
+[model.defaults]
+
+wind = [0.0, 0.0]
+airspeed = 14.0
+
+[controllers]
+
+[controllers.pt]
+
+# [e_chi, e_c, phi, dphi]
+Q = [10.0, 0.1, 0.01, 0.1]
+# [dphi_ref]
+R = [100]
+
+ny = 5
+ny_e = 4
+
+[controllers.empcc]
+
+# [e_c, phi, dphi]
+Q = [0.05, 0.01, 0.1]
+# [dphi_ref]
+R = [500]
+# progress weight
+rho = 10
+
+ny = 5
+ny_e = 3
+
+[controllers.mpcc]
+
+# number of breakpoints
+n_s = 100
+
+# progress weight
+rho = 10
+
+# [e_c, e_l, phi, dphi]
+Q = [0.05, 100.0, 0.01, 0.1]
+
+# [dphi_ref]
+R = [500]
+
+ny = 6
+ny_e = 4
+
+[constraints]
+
+[constraints.state]
+# maximum bank angle in degrees
+phi_max_deg = 30.0
+
+[constraints.path]
+# cross-path constraints
+lh = [-25.0]
+uh = [20.0]
+# terminal constraints
+lh_e = [-0.0]
+uh_e = [0.0]
+# slack weight
+Z = [1000.0]
+z = [100.0]
+# terminal slack weight
+Z_e = [100.0]
+z_e = [10.0]
+
+[rti]
+
+verbose = true
+halt_on_error = false

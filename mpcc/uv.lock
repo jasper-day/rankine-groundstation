@@ -331,6 +331,15 @@ wheels = [
 ]
 
 [[package]]
+name = "immutabledict"
+version = "4.2.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e0/c5/4240186fbabc58fba41bbe17c5f0cd37ffd4c0b85a5029ab104f946df175/immutabledict-4.2.1.tar.gz", hash = "sha256:d91017248981c72eb66c8ff9834e99c2f53562346f23e7f51e7a5ebcf66a3bcc", size = 6228 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/59/56/25ca7b848164b7d93dbd5fc97dd7751700c93e324fe854afbeb562ee2f98/immutabledict-4.2.1-py3-none-any.whl", hash = "sha256:c56a26ced38c236f79e74af3ccce53772827cef5c3bce7cab33ff2060f756373", size = 4700 },
+]
+
+[[package]]
 name = "iniconfig"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -730,9 +739,11 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "acados-template" },
+    { name = "immutabledict" },
     { name = "jax" },
     { name = "numpy" },
     { name = "pydantic" },
+    { name = "pygeodesy" },
     { name = "pymavlink" },
     { name = "toml" },
 ]
@@ -759,10 +770,12 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "acados-template", directory = "external/acados/interfaces/acados_template" },
+    { name = "immutabledict", specifier = ">=4.2.1" },
     { name = "jax", specifier = ">=0.6.1" },
     { name = "numpy" },
     { name = "pybind11", marker = "extra == 'dev'" },
     { name = "pydantic", specifier = ">=2.10.6" },
+    { name = "pygeodesy", specifier = ">=25.5.28" },
     { name = "pymavlink", specifier = ">=2.4.47" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "scikit-build-core", marker = "extra == 'dev'", specifier = ">=0.10" },
@@ -1093,6 +1106,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/86/aa/837821ecf0c022bbb74ca132e117c358321e72e7f9702d1b6a03758545e2/pydantic_core-2.27.2-pp310-pypy310_pp73-musllinux_1_1_armv7l.whl", hash = "sha256:0296abcb83a797db256b773f45773da397da75a08f5fcaef41f2044adec05f50", size = 2116582 },
     { url = "https://files.pythonhosted.org/packages/81/b0/5e74656e95623cbaa0a6278d16cf15e10a51f6002e3ec126541e95c29ea3/pydantic_core-2.27.2-pp310-pypy310_pp73-musllinux_1_1_x86_64.whl", hash = "sha256:0d75070718e369e452075a6017fbf187f788e17ed67a3abd47fa934d001863d9", size = 2151985 },
     { url = "https://files.pythonhosted.org/packages/63/37/3e32eeb2a451fddaa3898e2163746b0cffbbdbb4740d38372db0490d67f3/pydantic_core-2.27.2-pp310-pypy310_pp73-win_amd64.whl", hash = "sha256:7e17b560be3c98a8e3aa66ce828bdebb9e9ac6ad5466fba92eb74c4c95cb1151", size = 2004715 },
+]
+
+[[package]]
+name = "pygeodesy"
+version = "25.5.28"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/aa/cda0be935ec2aeb328c97a81317c2c186a4dd158770db8d22bf0057ecce9/pygeodesy-25.5.28.tar.gz", hash = "sha256:d7915e89a192a87f769807ed4ebc35eb500cc0006d63f2baa2c52e4f09c87208", size = 8051421 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/75/ae/d26f5d172c6af06598d59187e9149bab5b6df73edaee88b2dc9b39b4d641/pygeodesy-25.5.28-py2.py3-none-any.whl", hash = "sha256:d7ef85d2ad18ccff6fa7d9d889ead3751e46e626d7b8249e363760fb07c98a0c", size = 1053709 },
 ]
 
 [[package]]

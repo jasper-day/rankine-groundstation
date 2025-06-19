@@ -4,7 +4,6 @@ from acados_template import AcadosOcpSolver, AcadosSimSolver, AcadosOcp
 from dryden_turbulence import TurbulenceSimulator
 from typing import Callable
 
-
 def run_ocp(
     ocp: AcadosOcp,
     ocp_solver: AcadosOcpSolver,
