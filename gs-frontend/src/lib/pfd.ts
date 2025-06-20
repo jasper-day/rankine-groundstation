@@ -248,6 +248,8 @@ interface PfdInfo {
     gs: number;
     ws: number;
     heading: number;
+    connected: boolean;
+    armed: boolean;
 }
 function draw_heading(ctx: Ctx, w: number, h: number, heading: number) {
     ctx.lineWidth = 1;
@@ -370,6 +372,8 @@ export function draw_horizon(pfd: HTMLCanvasElement, ctx: CanvasRenderingContext
     ctx.fillText("GS: " + data.gs.toFixed(1), 20, pfd.height - 16 - 40);
     ctx.fillText("WS: " + data.ws.toFixed(1), 20, pfd.height - 40);
 
+    ctx.fillText(data.armed ? "Armed" : "Disarmed", pfd.width - 20 - ctx.measureText("Disarmed").width, pfd.height - 40);
+
     function clamp(x: number): number {
         while (x < Math.PI) x += Math.PI * 2;
         while (x > Math.PI) x -= Math.PI * 2;
@@ -383,4 +387,13 @@ export function draw_horizon(pfd: HTMLCanvasElement, ctx: CanvasRenderingContext
     // ctx.moveTo(w/2 - (command_roll - roll) * 200, h/2 - 60);
     // ctx.lineTo(w/2 - (command_roll - roll) * 200, h/2 + 60);
     // ctx.stroke();
+    //
+    if (!data.connected) {
+        ctx.fillStyle = "#ff0000";
+        ctx.font = "50px sans-serif";
+        ctx.textBaseline = "hanging";
+        const msg = "NOT CONNECTED";
+        const s = ctx.measureText(msg);
+        ctx.fillText(msg, (pfd.width - s.width) / 2, (pfd.height - s.actualBoundingBoxDescent) / 2);
+    }
 }

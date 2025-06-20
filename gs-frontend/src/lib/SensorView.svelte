@@ -42,7 +42,6 @@
         );
     }
     export function draw_graphs() {
-        if (sensors.length < 100) return;
         for (let i = 0; i < sensors.length; i++) {
             const canvas = graphs[i];
             if (!canvas) continue;
@@ -58,6 +57,10 @@
             const begin_idx = Math.max(0, sensors[i][1].length - n_points);
             let min = Math.min(...sensors[i][1].slice(begin_idx));
             let max = Math.max(...sensors[i][1].slice(begin_idx));
+            if (max - min < 0.0001) {
+                min -= 0.01;
+                max += 0.01;
+            }
             let scl = (max - min) / canvas.height;
             ctx.lineWidth = 2;
             for (let j = begin_idx; j < sensors[i][1].length - 2; j++) {

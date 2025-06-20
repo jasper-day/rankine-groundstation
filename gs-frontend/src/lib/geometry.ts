@@ -506,3 +506,47 @@ function ang_mod2(a: number): number {
     while (a < 0) a += 2 * Math.PI;
     return a;
 }
+
+export function make_line(start: Local3, prev_shape: Line | Arc | undefined, mouse_local: Local3): Line {
+    let end;
+    if (prev_shape !== undefined) {
+        const dist = Local3.distance(start, mouse_local);
+        let dir;
+        if (prev_shape instanceof Line) {
+            dir = prev_shape.end.sub(prev_shape.start);
+            dir.normalise();
+        } else {
+            dir = prev_shape.tangent_at_endpoint();
+        }
+        end = dir.mul(dist).add(start);
+    } else {
+        end = mouse_local;
+    }
+    return new Line(start, end);
+}
+
+export function make_arc(
+    start: Local3,
+    prev_shape: Line | Arc | undefined,
+    mouse_local: Local3
+): [Arc, Local3] | undefined {
+    const p1 = start;
+    const p2 = mouse_local;
+
+    // Points are too close, can't make an arc
+    if (Local3.distance(p1, p2) < 0.01) return undefined;
+
+    let tangent;
+    if (prev_shape === undefined) {
+        // TODO ????
+        return undefined;
+    } else if (prev_shape instanceof Line) {
+        tangent = prev_shape.end.sub(prev_shape.start);
+    } else {
+        // uhh find tangent of arc
+        tangent = prev_shape.tangent_at_endpoint();
+    }
+    return [Arc.from_tangent_and_points(tangent, p1, p2), p2];
+}
+
+
