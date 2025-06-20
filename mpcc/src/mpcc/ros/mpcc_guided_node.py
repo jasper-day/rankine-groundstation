@@ -5,7 +5,7 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPo
 from rclpy.callback_groups import ReentrantCallbackGroup
 from geometry_msgs.msg import PoseStamped, TwistStamped, TwistWithCovarianceStamped
 from mavros_msgs.msg import State, AttitudeTarget, StatusText, Waypoint, CommandCode
-from mavros_msgs.srv import SetMode, WaypointClear, WaypointPush
+from mavros_msgs.srv import SetMode, WaypointClear, WaypointPush, MessageInterval
 from mavros.system import SENSOR_QOS
 from mavros.command import CommandBool, CommandTOL, CommandInt
 from mpcc_interfaces.srv import SetPath, GetPath
@@ -26,7 +26,7 @@ from mpcc.controller import MPCCController
 import toml
 import asyncio
 from mpcc.projection import geodetic_to_enu, enu_to_geodetic, Enu, Cartographic
-
+from copy import deepcopy
 
 class MPCCGuidedNode(Node):
     dubins: DubinsPath | None = None
@@ -138,7 +138,7 @@ class MPCCGuidedNode(Node):
 
         self.attitude_pub = self.create_publisher(
             AttitudeTarget,
-            "/mavros/setpoint_raw/target_attitude",
+            "/mavros/setpoint_raw/attitude",
             qos_profile=state_qos,
         )
 
@@ -171,6 +171,10 @@ class MPCCGuidedNode(Node):
             WaypointPush, "/mavros/mission/push", callback_group=cb_group
         )
 
+        self.message_interval_client = self.create_client(
+            MessageInterval, "/mavros/set_message_interval", callback_group=cb_group
+        )
+
         # Services
 
         self.set_path_srv = self.create_service(
@@ -195,6 +199,30 @@ class MPCCGuidedNode(Node):
             self.get_logger().info("Waiting for mode set service")
         while not self.tol_client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info("Waiting for takeoff landing service")
+        while not self.message_interval_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info("Waiting for message interval service")
+        
+        self.get_logger().info("Setting rates")
+        for (message_id, message_rate, message_name) in [
+            (2, 20, "SYS_TIME"),
+            (30, 20, "ATTITUDE"),
+            (31, 20, "ATTITUDE_QUATERNION"),
+            (32, 20, "LOCAL_POSITION_NED"),
+            (33, 20, "GLOBAL_POSITION_INT"),
+            # (61, 20, "ATTITUDE_QUATERNION_COV"),
+            (62, 10, "NAV_CONTROLLER_OUTPUT"),
+            # (63, 10, "GLOBAL_POSITION_NED_COV"),
+            # (64, 10, "LOCAL_POSITION_NED_COV"),
+            (141, 10, "ALTITUDE"),
+            # (231, 10, "WIND_COV"),
+        ]:
+            self.get_logger().info(f"Set {message_name} ({message_id})to rate {message_rate}")
+            req = MessageInterval.Request()
+            req.message_id = message_id
+            req.message_rate = float(message_rate)
+            future = self.message_interval_client.call_async(req)
+            future.message_name = message_name
+            future.add_done_callback(lambda future: self.get_logger().info("Set " + future.message_name + f": {future.result().success}"))
 
         # start timers
 
@@ -216,11 +244,16 @@ class MPCCGuidedNode(Node):
 
     def recv_gps_fix(self, msg):
         if self.origin is not None and self.dubins is not None:
-            enu = self.ltp_Enu(msg)
-            north = enu.n
-            east = enu.e
+            pos_enu = self.ltp_Enu(msg)
+            pos_curr = np.array([pos_enu.n, pos_enu.e])
+            if self.gps_fix is not None:
+                pos_prev_enu = self.ltp_Enu(self.gps_fix)
+                pos_prev = np.array([pos_prev_enu.n, pos_prev_enu.e])
+            else:
+                pos_prev = pos_curr
+            
             self.arclength = self.dubins.get_closest_arclength(
-                np.array([north, east]), self.arclength
+                pos_prev, pos_curr, self.arclength
             )
         self.gps_fix = msg
 
@@ -299,9 +332,9 @@ class MPCCGuidedNode(Node):
     def cmd_roll(self, roll_angle_rad: float):
         req = AttitudeTarget()
         req.type_mask = 126
-        # just rotation about the x-axis
-        req.orientation.w = math.cos(roll_angle_rad / 2)
-        req.orientation.x = math.sin(roll_angle_rad / 2)
+        # just rotation about the x-axis, but mavlink rotates everything 180 deg...?
+        req.orientation.w = math.cos(roll_angle_rad / 2 )
+        req.orientation.x = math.sin(roll_angle_rad / 2 )
         self.attitude_pub.publish(req)
         return None
 
@@ -519,8 +552,11 @@ class MPCCGuidedNode(Node):
         trajectory_plan.headings = res.solX[2::7].tolist()
         trajectory_plan.bank_angles = res.solX[3::7].tolist()
         self.trajectory_pub.publish(trajectory_plan)
-        self.get_logger().info(f"Updating MPCC with target bank angle {np.degrees(res.solX[3]):.2f} deg (current: {np.degrees(phi):.2f} deg); arclength {s:.2f}; heading {xi:.2f}")
-        self.cmd_roll(res.solX[3])
+        
+        target_bank = phi_ref + res.solU[0]
+
+        self.get_logger().info(f"Updating MPCC with target bank angle {np.degrees(target_bank):.2f} deg (current: {np.degrees(phi):.2f} deg); arclength {s:.2f}; heading {xi:.2f}")
+        self.cmd_roll(target_bank)
 
         self.controller.prepare()
 
