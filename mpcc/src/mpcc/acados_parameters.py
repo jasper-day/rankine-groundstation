@@ -26,7 +26,7 @@ def get_acados_path_parameters(path: DubinsPath, current_s: float) -> np.ndarray
     """
     lengths = np.array(path.lengths())
     cum_lengths = np.cumsum(lengths)
-    curr_segments = np.argwhere(cum_lengths >= current_s)
+    curr_segments = np.nonzero(cum_lengths >= current_s)[0]
     # get the first and second segments
     first_segment = path.get_segment(curr_segments[0])
     # set the parameters

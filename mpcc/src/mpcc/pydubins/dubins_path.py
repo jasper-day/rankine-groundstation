@@ -110,7 +110,8 @@ class DubinsPath:
             for possible in possibles:
                 arclength = arclength_prev + possible
                 delta = jnp.abs(estimated_arclength - arclength)
-                if delta < closest_delta:
+                # 10 meters is chosen to allow the estimated arclength to jump segments
+                if delta < closest_delta or delta < 10:
                     closest_arclength = arclength
                     closest_delta = delta
             arclength_prev += segment.length()

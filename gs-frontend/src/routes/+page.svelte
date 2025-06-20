@@ -65,6 +65,7 @@
     } from "$lib/rostypes/ros_msgs";
     import { open_ros } from "$lib/mavros";
     import { nonpassive } from "svelte/legacy";
+    import { EnuToEcef } from "$lib/projection";
 
     Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN;
 
@@ -161,10 +162,13 @@
                     break;
                 case MavrosMsgs.StatusTextSeverity.NOTICE:
                     classes.push("text-yellow");
+                    break;
                 case MavrosMsgs.StatusTextSeverity.INFO:
                     classes.push("text-white/90");
+                    break;
                 case MavrosMsgs.StatusTextSeverity.DEBUG:
                     classes.push("text-white/90");
+                    break;
             }
             messagePar.classList.add(...classes);
             messagePar.innerText = message.text;
@@ -178,7 +182,9 @@
 
     let statusListener: ROSLIB.Topic | null = null,
         armVehicle: ROSLIB.Service | null = null,
-        setPathService: ROSLIB.Service | null = null;
+        setPathService: ROSLIB.Service | null = null,
+        trajectory_plan_listener: ROSLIB.Topic | null = null,
+        trajectory_plan: MpccInterfaces.TrajectoryPlan | null = null;
 
     function onRosConnect() {
         console.log("roslib connected");
@@ -193,7 +199,7 @@
 
         // periodically record history
         setInterval(function () {
-            mavDataHistory.push(mavData);
+            mavDataHistory.push(structuredClone(mavData));
             if (mavDataHistory.length > 4096) {
                 mavDataHistory.unshift();
             }
@@ -217,6 +223,13 @@
             name: "gs/set_path",
             serviceType: "mpcc_interfaces/srv/SetPath"
         });
+
+        trajectory_plan_listener = new ROSLIB.Topic({
+            ros: ros,
+            name: "gs/trajectory_plan",
+            messageType: "mpcc_interfaces/msg/TrajectoryPlan"
+        });
+        trajectory_plan_listener.subscribe(updateTrajectoryPlan);
     }
 
     function enableArm(e: Event) {
@@ -248,8 +261,8 @@
     function sendPath(e: Event) {
         if (setPathService) {
             const origin: GeographicMsgs.GeoPoint = {
-                latitude: ORIGIN.latitude,
-                longitude: ORIGIN.longitude,
+                latitude: (ORIGIN.latitude * 180) / Math.PI, // must be in degrees
+                longitude: (ORIGIN.longitude * 180) / Math.PI,
                 altitude: ORIGIN.height
             };
             let s_shapes = shapes.map((sh) => sh.serialise());
@@ -266,6 +279,10 @@
                 console.log(res.error_msg);
             });
         }
+    }
+
+    function updateTrajectoryPlan(msg: MpccInterfaces.TrajectoryPlan) {
+        trajectory_plan = msg;
     }
 
     var ros = open_ros(
@@ -341,6 +358,19 @@
         a = viewer.scene.cartesianToCanvasCoordinates(cartesians[cartesians.length - 1], scratchc3_a);
         ctx.lineTo(a.x, a.y);
         ctx.stroke();
+
+        if (trajectory_plan) {
+            ctx.strokeStyle = "blue";
+            ctx.fillStyle = "#ffd040";
+            ctx.beginPath();
+            let local: Local3 | null = null;
+            for (let i = 0; i != trajectory_plan.norths.length; i++) {
+                local = new Local3(trajectory_plan.easts[i], trajectory_plan.norths[i], 100);
+                let b = viewer.scene.cartesianToCanvasCoordinates(local.toCartesian(), scratchc3_b);
+                i == 0 ? ctx.moveTo(a.x, a.y) : ctx.lineTo(b.x, b.y);
+            }
+            ctx.stroke();
+        }
 
         // draw that pointer thing
         if (!mavData.compassHeading) return;

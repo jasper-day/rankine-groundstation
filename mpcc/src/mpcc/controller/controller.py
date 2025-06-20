@@ -31,6 +31,8 @@ class MPCCController:
     ocp_integrator: AcadosSimSolver | None = None
     x_names = ["north", "east", "xi", "phi", "dphi", "phi_ref", "s"]
     u_names = ["dphi_ref"]
+    preparation_status: int
+    t_preparation: float
     ready: bool = False
 
     def __init__(self, config: dict[str, any]):
@@ -127,7 +129,7 @@ class MPCCController:
         else:
             self.ocp_integrator = None
 
-        self._prepare()
+        self.preparation_status = self.prepare()
         # end setup
 
     def set_path(self, path: DubinsPath):
@@ -143,9 +145,6 @@ class MPCCController:
         self, arclength: float, wind: np.ndarray, airspeed: float, X: np.ndarray
     ):
         "Run one iteration of solver."
-
-        t_preparation = self.ocp_solver.get_stats("time_tot")
-
         N_horizon = self.config["N_horizon"]
 
         path_parameters = self.curr_params(arclength, wind, airspeed)
@@ -172,8 +171,9 @@ class MPCCController:
             simX = None
 
         return SolverResult(
+            preparation_status=self.preparation_status,
             feedback_status=feedback_status,
-            t_preparation=t_preparation,
+            t_preparation=self.t_preparation,
             t_feedback=t_feedback,
             cost=cost,
             simX=simX,
@@ -181,12 +181,13 @@ class MPCCController:
             solU=solU,
         )
 
-    def _prepare(self):
+    def prepare(self):
         "Prepare for feedback"
         # preparation phase
         self.ocp_solver.options_set("rti_phase", 1)
-        # return status
-        return self.ocp_solver.solve()
+        self.preparation_status = self.ocp_solver.solve()
+        self.t_preparation = self.ocp_solver.get_stats("time_tot")
+
 
     def destroy(self):
         "Release memory held by the controller"
@@ -199,7 +200,7 @@ class MPCCController:
 
     def curr_params(self, arclength: float, wind: np.ndarray, airspeed: float):
         "Get the current & upcoming path parameters"
-        if self.config["controllers"][self.config["controller"]] in ["pt", "mpcc"]:
+        if self.config["controller"] in ["pt", "mpcc"]:
             return get_params(wind, airspeed, self.path, arclength)
         else:
             return np.array([*wind, airspeed])

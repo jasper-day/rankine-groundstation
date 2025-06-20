@@ -71,35 +71,36 @@ class StateMachine:
             ),
             StateTransition(
                 SMState.ARMED,
+                SMState.CONNECTED,
+                lambda: not self.node.arm_ready,
+                action=self.node.disarm_drone,
+            ),
+            StateTransition(
+                SMState.ARMED,
+                SMState.TAKING_OFF,
+                lambda: self.node.current_state.mode != "TAKEOFF",
+                action=self.node.set_takeoff,
+                after=1.0,
+            ),
+            StateTransition(
+                SMState.TAKING_OFF,
                 SMState.SET_AUTO,
-                lambda: self.node.current_state.mode != "AUTO",
+                self.node.takeoff_altitude_reached,
                 action=self.node.set_auto,
-                after=1.0,
-                timeout=3.0,
+                after=5.0,
             ),
             StateTransition(
                 SMState.SET_AUTO,
-                SMState.TAKING_OFF,
-                lambda: True,
-                action=self.node.takeoff,
-                after=1.0,
-                timeout=3.0,
-            ),
-            StateTransition(
-                SMState.TAKING_OFF,
-                SMState.WP_FOLLOW,
-                lambda: False, # TODO: update
-            ),
-            StateTransition(
-                SMState.WP_FOLLOW,
                 SMState.MPCC,
-                lambda: self.node.mpcc_ready,
+                self.node.mpcc_ready,
+                action=self.node.start_mpcc,
                 after=5.0,
             ),
             StateTransition(
                 SMState.MPCC,
-                SMState.WP_FOLLOW,
+                SMState.SET_AUTO,
                 lambda: False, # fallback to onboard auto
+                action=self.node.set_auto
             ),
             StateTransition(
                 SMState.WP_FOLLOW,
@@ -117,9 +118,13 @@ class StateMachine:
         return self.pending_future is None or self.pending_future.done()
 
     def _set_timeout(self, timeout):
+        self._clear_timeout
+        self.timer = self.node.create_timer(timeout, self._on_timeout)
+
+    def _clear_timeout(self):
         if self.timer:
             self.timer.destroy()
-        self.timer = self.node.create_timer(timeout, self._on_timeout)
+        
 
     def _on_timeout(self):
         self.node.get_logger().info(f"Timeout in state {self.state}")
@@ -146,6 +151,7 @@ class StateMachine:
                 )
                 self.state = transition.to_state
                 self.last_transition_time = self.node.get_clock().now()
+                self._clear_timeout()
 
                 if transition.action:
                     self.pending_future = transition.action()

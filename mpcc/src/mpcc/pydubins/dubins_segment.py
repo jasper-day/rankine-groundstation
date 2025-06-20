@@ -153,7 +153,7 @@ class LineSegment(Segment):
         # only one possible arclength for a line segment
         AB = self.end() - self.start()
         AB /= jnp.linalg.norm(AB)
-        return [AB.dot(position - self.start())]
+        return [jnp.clip(AB.dot(position - self.start()), 0, self.length())]
 
 class CircularSegment(Segment):
     "A circular arc"
