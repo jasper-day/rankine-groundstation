@@ -99,19 +99,30 @@ class DubinsPath:
     def get_types(self) -> list[SegmentType]:
         return [segment.type for segment in self._segments]
 
-    def get_closest_arclength(self, pos: Vec2, estimated_arclength: float):
+    def get_segment_index_by_arclength(self, arclength: float):
+        "Get the index of the segment containing this arclength"
+        tot_lengths = jnp.cumsum(jnp.array(self.lengths()))
+        return jnp.nonzero(tot_lengths > arclength)[0][0]
+
+    def get_closest_arclength(self, pos_prev: Vec2, pos_curr: Vec2, estimated_arclength: float):
         "Find the arclength to a given point closest to the estimated arclength"
+        dpos = pos_curr - pos_prev
+        # segment at previous arclength
+        seg_i = self.get_segment_index_by_arclength(estimated_arclength)
+        # get unit tangent vector
+        ds = self.get_segment(seg_i).ds(pos_prev, dpos)
+        new_estimated_arclength = estimated_arclength + ds
         arclength_prev = 0.0
         closest_arclength = 0.0
         closest_delta = jnp.inf
         for segment in self._segments:
             # please lord let it not be O(N^2)
-            possibles = segment.possible_arclengths(pos)
+            possibles = segment.possible_arclengths(pos_curr)
             for possible in possibles:
                 arclength = arclength_prev + possible
-                delta = jnp.abs(estimated_arclength - arclength)
-                # 10 meters is chosen to allow the estimated arclength to jump segments
-                if delta < closest_delta or delta < 10:
+                delta = jnp.abs(new_estimated_arclength - arclength)
+                # allow the estimated arclength to jump segments
+                if delta < closest_delta or delta < 3:
                     closest_arclength = arclength
                     closest_delta = delta
             arclength_prev += segment.length()

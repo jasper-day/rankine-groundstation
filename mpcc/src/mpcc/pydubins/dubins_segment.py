@@ -73,8 +73,13 @@ class Segment:
         "Create a new, offset segment"
         raise NotImplementedError()
     
+    def ds(self, position: jnp.ndarray, velocity: jnp.ndarray) -> float:
+        "Arclength velocity tangent to the curve"
+        raise NotImplementedError()
+
     def possible_arclengths(self, position: jnp.ndarray) -> list[float]:
         raise NotImplementedError()
+    
 
 
 class LineSegment(Segment):
@@ -149,11 +154,18 @@ class LineSegment(Segment):
         perp = jnp.array([AB[1] * offset, -AB[0] * offset])
         return LineSegment(self.start() + perp, self.end() + perp)
     
+    def ds(self, position, velocity):
+        AB = self.end() - self.start()
+        AB /= jnp.linalg.norm(AB)
+        return velocity.dot(AB)
+
     def possible_arclengths(self, position):
         # only one possible arclength for a line segment
         AB = self.end() - self.start()
         AB /= jnp.linalg.norm(AB)
         return [jnp.clip(AB.dot(position - self.start()), 0, self.length())]
+    
+    
 
 class CircularSegment(Segment):
     "A circular arc"
@@ -246,6 +258,14 @@ class CircularSegment(Segment):
             self._arclength * (1 + offset * self._dir() / self._radius),
         )
     
+    def ds(self, position, velocity):
+        # nomenclature to match cc_controllers
+        circ_r = self._radius
+        circ_c = self._center
+        circ_xc = position - circ_c
+        circ_dir = self._dir()
+        return circ_r * circ_dir * jnp.dot(velocity, jnp.array([-circ_xc[1], circ_xc[0]])) / circ_xc.dot(circ_xc)
+
     def possible_arclengths(self, position):
         # family of possible arclengths for a circular segment
         # noting that it could wrap onto itself multiple times...
