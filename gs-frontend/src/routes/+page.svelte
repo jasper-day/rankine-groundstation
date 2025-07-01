@@ -55,30 +55,11 @@
     import { MpccInterfaces } from "$lib/rostypes/ros_msgs";
     import { Coord_Type, get_cartesians, to_czml, type BMFA_Coords } from "$lib/waypoints";
     import { browser } from "$app/environment";
+    import { draw_coordinates, draw_intermediate_shape, draw_mav_history } from "$lib/graphics";
 
     Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN;
 
     let shapes: (Arc | Line)[] = [];
-    // async function close_path() {
-    //     let s_shapes = shapes.map((sh) => sh.serialise());
-    //     let response = await n.request({ op: "path:solve", data: { path: s_shapes } });
-    //     console.log("Got response", response);
-    //     if (response instanceof ConnectionError) {
-    //         // idk how to handle this TODO
-    //     } else if (response instanceof ServerError) {
-    //         console.log(
-    //             `The server responded with error message '${response.message}' for packet '${JSON.stringify(response.request)}'`
-    //         );
-    //     } else {
-    //         shapes = response.path.map((ds: any) => {
-    //             if (ds.type == "arc") {
-    //                 return Arc.deserialise(ds);
-    //             } else if (ds.type == "line") {
-    //                 return Line.deserialise(ds);
-    //             }
-    //         });
-    //     }
-    // }
 
     let viewer: Viewer | undefined;
     let ctx: CanvasRenderingContext2D | null = null;
@@ -96,114 +77,6 @@
           }
         | undefined = undefined;
 
-    function draw_mav_history(history: IMavData[], current: IMavData, plan: MpccInterfaces.TrajectoryPlan | null) {
-        if (!viewer || !ctx) return;
-        const degrees_heights_array = history
-            .map((element) => {
-                return element.gpsFix !== undefined && element.gpsFix.latitude !== 0 && element.gpsFix.longitude !== 0
-                    ? [element.gpsFix?.longitude, element.gpsFix?.latitude, element.gpsFix?.altitude]
-                    : [];
-            })
-            .flat();
-
-        if (degrees_heights_array.length < 2 * 3) return;
-
-        const cartesians = Cartesian3.fromDegreesArrayHeights(degrees_heights_array, Ellipsoid.WGS84);
-
-        let a = viewer.scene.cartesianToCanvasCoordinates(cartesians[0], scratchc3_a);
-
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.strokeStyle = "red";
-        ctx.fillStyle = "#ffd040";
-        for (let i = 1; i < cartesians.length; i += 1) {
-            if (cartesians[i].x === cartesians[i - 1].x) {
-                continue;
-            }
-            const b = viewer.scene.cartesianToCanvasCoordinates(cartesians[i], scratchc3_b);
-            ctx.lineTo(b.x, b.y);
-        }
-        a = viewer.scene.cartesianToCanvasCoordinates(cartesians[cartesians.length - 1], scratchc3_a);
-        ctx.lineTo(a.x, a.y);
-        ctx.stroke();
-
-        if (plan) {
-            ctx.strokeStyle = "blue";
-            ctx.fillStyle = "#ffd040";
-            ctx.beginPath();
-            let local: Local3 | null = null;
-            for (let i = 0; i != plan.norths.length; i++) {
-                local = new Local3(plan.easts[i], plan.norths[i], 100);
-                let b = viewer.scene.cartesianToCanvasCoordinates(local.toCartesian(), scratchc3_b);
-                i == 0 ? ctx.moveTo(a.x, a.y) : ctx.lineTo(b.x, b.y);
-            }
-            ctx.stroke();
-        }
-
-        // draw that pointer thing
-        if (!current.compassHeading) return;
-        curr_heading = ((current.compassHeading.data || 0.0) * Math.PI) / 180;
-        ctx.strokeStyle = "#f00000";
-        ctx.fillStyle = "#ff4030";
-        ctx.save();
-        ctx.translate(a.x, a.y);
-        ctx.rotate(curr_heading - Math.PI / 2);
-        ctx.beginPath();
-        const l = 10;
-        const w = 8;
-        ctx.moveTo(l, 0);
-        ctx.lineTo(-l, w);
-        ctx.lineTo(-l / 2, 0);
-        ctx.lineTo(-l, -w);
-        ctx.lineTo(l, 0);
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-    }
-
-    // to avoid instantiating objects continuously
-    // may be premature optimisation but cesium does it so i will too
-    const scratchc3_a: Cartesian3 = new Cartesian3();
-    const scratchc3_b: Cartesian3 = new Cartesian3();
-
-    function draw_intermediate_shape(viewer: Viewer, intermediate_point: Local3, ctx: CanvasRenderingContext2D) {
-        // TODO costly operation to undo later on...
-        const mouse_cartesian = viewer.camera.pickEllipsoid(new Cartesian3(mouseX, mouseY), viewer.scene.ellipsoid);
-        if (!mouse_cartesian) return;
-        const mouse_local = Local3.fromCartesian(mouse_cartesian);
-        mouse_local.z = 100; // for now, we define the path always at 100m above surface
-
-        const c = viewer.scene.cartesianToCanvasCoordinates(intermediate_point.toCartesian(), scratchc3_a);
-        if (Cartesian2.distance(c, new Cartesian2(mouseX, mouseY)) < 5) {
-            if (has_moved_away) {
-                tool = tool == "Line" ? "Arc" : "Line";
-                has_moved_away = false;
-                return;
-            }
-        } else {
-            has_moved_away = true;
-        }
-
-        if (tool == "Line") {
-            make_line(intermediate_point, shapes[shapes.length - 1], mouse_local).draw(ctx, viewer);
-        }
-        if (tool == "Arc" && intermediate_point !== undefined) {
-            const p1 = intermediate_point;
-            const p2 = mouse_local;
-            // Points are too close, can't make an arc
-            if (Local3.distance(p1, p2) < 0.01) return;
-
-            const line = shapes[shapes.length - 1];
-            let tangent;
-            if (line instanceof Line) {
-                tangent = line.end.sub(line.start);
-            } else {
-                tangent = line.tangent_at_endpoint();
-            }
-
-            Arc.from_tangent_and_points(tangent, p1, p2).draw(ctx, viewer);
-        }
-    }
     let roll_command = 0;
     let curr_heading = 0;
     let coordinates: BMFA_Coords[] | null = null;
@@ -211,55 +84,10 @@
     let waypoints: BMFA_Coords[] | null = null;
     let payload: BMFA_Coords | null = null;
 
-    function draw_coordinates(coordinates: BMFA_Coords[]) {
-        if (!viewer || !ctx || !coordinates || !geofence) return;
-        const cartesians = get_cartesians(coordinates);
-        ctx.save();
-        for (let i = 0; i < coordinates.length; i += 1) {
-            let a = viewer.scene.cartesianToCanvasCoordinates(cartesians[i], scratchc3_a);
-            let mouse_inside = false;
-            if (
-                Math.pow(mouseX - a.x, 2) + Math.pow(mouseY - a.y, 2) <
-                HANDLE_POINT_RADIUS * HANDLE_POINT_RADIUS + 150
-            ) {
-                mouse_inside = true;
-            }
-            let lightness = mouse_inside ? "50%" : "90%";
-            let hue: string = "0deg";
-            switch (coordinates[i].type) {
-                case Coord_Type.RUNWAY:
-                    hue = "150deg";
-                    break;
-                case Coord_Type.GEOFENCE:
-                    hue = "30deg";
-                    break;
-                case Coord_Type.WAYPOINT:
-                    hue = "230deg";
-                    break;
-                case Coord_Type.PAYLOAD:
-                    hue = "300deg";
-                    break;
-            }
-            ctx.fillStyle = `lch(${lightness} 100% ${hue})`;
-            ctx.beginPath();
-            ctx.arc(a.x, a.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
-            ctx.fill();
-        }
-
-        const geofence_cart = get_cartesians(geofence);
-
-        ctx.strokeStyle = "lch(50% 80% 30deg)";
-        ctx.beginPath();
-        let path_end = viewer.scene.cartesianToCanvasCoordinates(geofence_cart.at(-1) as Cartesian3, scratchc3_a);
-        ctx.moveTo(path_end.x, path_end.y);
-        for (let i = 0; i < geofence_cart.length; i += 1) {
-            let a = viewer.scene.cartesianToCanvasCoordinates(geofence_cart[i], scratchc3_a);
-            ctx.lineTo(a.x, a.y);
-        }
-
-        ctx.stroke();
-        ctx.restore();
-    }
+    // to avoid instantiating objects continuously
+    // may be premature optimisation but cesium does it so i will too
+    const scratchc3_a: Cartesian3 = new Cartesian3();
+    const scratchc3_b: Cartesian3 = new Cartesian3();
 
     onMount(() => {
         // Initialize the Cesium Viewer in the HTML element with the `cesiumContainer` ID.
@@ -340,12 +168,12 @@
 
                 if (intermediate_point !== undefined) {
                     // some shape is being defined!! draw it
-                    draw_intermediate_shape(viewer, intermediate_point, ctx);
+                    draw_intermediate_shape(viewer, intermediate_point, ctx, mouseX, mouseY, has_moved_away, tool, shapes);
                 }
                 const mav_history = get_mav_data_history();
                 const plan = get_trajectory_plan();
-                draw_mav_history(mav_history, mav_data, plan);
-                draw_coordinates(coordinates);
+                draw_mav_history(mav_history, mav_data, plan, viewer, ctx, curr_heading);
+                coordinates && geofence && draw_coordinates(coordinates, ctx, viewer, geofence, mouseX, mouseY);
             }
             if (pfd_ctx) {
                 let pitch = 0;
@@ -391,16 +219,13 @@
         viewer.cesiumWidget.canvas.addEventListener("pointerdown", mousedown);
         viewer.cesiumWidget.canvas.addEventListener("pointerup", mouseup);
 
-
-        let shapes_serialised = localStorage.getItem('path');
+        let shapes_serialised = localStorage.getItem("path");
         if (shapes_serialised) {
             console.log(shapes_serialised);
             shapes = deserialise_path(shapes_serialised);
         }
 
-        setInterval(
-            () => localStorage.setItem('path', serialise_path(shapes))
-        )
+        setInterval(() => localStorage.setItem("path", serialise_path(shapes)));
     });
 
     let drag_object: { shape_index: number; point_index: number } | undefined = undefined;
@@ -415,7 +240,8 @@
             const mouse_local = Local3.fromCartesian(cartesian);
             mouse_local.z = 100; // for now, we define the path always at 100m above surface
 
-            if (tool == "Line") {2
+            if (tool == "Line") {
+                2;
                 if (intermediate_point === undefined) {
                     // add first point
                     intermediate_point = mouse_local;
