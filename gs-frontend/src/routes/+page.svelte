@@ -23,13 +23,16 @@
         Cartesian2,
         Ellipsoid,
         UrlTemplateImageryProvider,
-        CzmlDataSource
+        CzmlDataSource,
+
+        Cartographic
+
     } from "cesium";
     import {
         Arc,
         HANDLE_POINT_RADIUS,
         Line,
-        Local3,
+        Local2,
         ORIGIN,
         quaternion_to_RPY,
         make_line,
@@ -52,9 +55,7 @@
         terminate,
         type IMavData
     } from "$lib/mav";
-    import { MpccInterfaces } from "$lib/rostypes/ros_msgs";
-    import { Coord_Type, get_cartesians, to_czml, type BMFA_Coords } from "$lib/waypoints";
-    import { browser } from "$app/environment";
+    import { Coord_Type, to_czml, type BMFA_Coords } from "$lib/waypoints";
     import { draw_coordinates, draw_intermediate_shape, draw_mav_history } from "$lib/graphics";
 
     Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN;
@@ -65,9 +66,8 @@
     let ctx: CanvasRenderingContext2D | null = null;
     let pfd_ctx: CanvasRenderingContext2D | null = null;
     let tool: "Line" | "Arc" | "Empty" = "Empty";
-    let editing_mode: "Create" | "Edit" = "Create";
-    let intermediate_point: Local3 | undefined = undefined;
-    const plane_points: Local3[] = [];
+    let intermediate_point: Local2 | undefined = undefined;
+    const plane_points: Local2[] = [];
     let data:
         | {
               t: number[];
@@ -174,6 +174,7 @@
                 const plan = get_trajectory_plan();
                 draw_mav_history(mav_history, mav_data, plan, viewer, ctx, curr_heading);
                 coordinates && geofence && draw_coordinates(coordinates, ctx, viewer, geofence, mouseX, mouseY);
+                draw_waypoint_distances(ctx, viewer);
             }
             if (pfd_ctx) {
                 let pitch = 0;
@@ -228,6 +229,53 @@
         setInterval(() => localStorage.setItem("path", serialise_path(shapes)));
     });
 
+    function draw_waypoint_distances(ctx: CanvasRenderingContext2D, viewer: Viewer) {
+        if (!waypoints) return;
+        const mouse = new Cartesian2(mouseX, mouseY);
+        const ellipsoid = viewer.scene.ellipsoid;
+        const mouse_cart = viewer.camera.pickEllipsoid(new Cartesian3(mouseX, mouseY), ellipsoid);
+        let closest_point: Cartesian2 | undefined;
+        let closest_point_cart: Cartesian3 | undefined;
+        let closest_dist = 100000000000000000000000000000.0; // TODO infinity
+        const cartesians = Cartesian3.fromDegreesArray(waypoints.flatMap((w) => [w.longitude, w.latitude]));
+        for (const c of cartesians) {
+            const screen = viewer.scene.cartesianToCanvasCoordinates(c);
+            const dist = Cartesian2.distanceSquared(mouse, screen);
+            if (dist < closest_dist) {
+                closest_dist = dist;
+                closest_point = screen;
+                closest_point_cart = c;
+            }
+        }
+        if (!closest_point || !closest_point_cart || !mouse_cart) return;
+        const dist_metres = Cartesian3.distance(mouse_cart, closest_point_cart)
+        if (dist_metres > 50) return;
+
+        const dash_len = 5;
+        const pos = closest_point;
+        closest_dist = Math.sqrt(closest_dist);
+        const dashes = Math.floor(closest_dist / dash_len / 2);
+        const direction = Cartesian2.subtract(mouse, closest_point, scratchc3_a);
+        Cartesian2.normalize(direction, direction);
+        const half_way = Cartesian2.multiplyByScalar(direction, closest_dist / 2, scratchc3_b);
+        const midpoint = Cartesian2.add(closest_point, half_way, scratchc3_b);
+        Cartesian2.multiplyByScalar(direction, dash_len, direction);
+        ctx.beginPath();
+        ctx.strokeStyle = "lightblue";
+        ctx.fillStyle = ctx.strokeStyle;
+        for (let i = 0; i < dashes; i++) {
+            ctx.moveTo(pos.x, pos.y);
+            Cartesian2.add(pos, direction, pos);
+            ctx.lineTo(pos.x, pos.y);
+            Cartesian2.add(pos, direction, pos);
+        }
+        ctx.stroke();
+
+
+        ctx.beginPath();
+        ctx.fillText(dist_metres.toFixed(1), midpoint.x, midpoint.y);
+    }
+
     let drag_object: { shape_index: number; point_index: number } | undefined = undefined;
     let has_moved_away = false;
     function mousedown(event: MouseEvent) {
@@ -237,11 +285,9 @@
                 viewer.scene.ellipsoid
             );
             if (!cartesian) return; // just ignore an invalid position
-            const mouse_local = Local3.fromCartesian(cartesian);
-            mouse_local.z = 100; // for now, we define the path always at 100m above surface
+            const mouse_local = Local2.fromCartesian(cartesian);
 
             if (tool == "Line") {
-                2;
                 if (intermediate_point === undefined) {
                     // add first point
                     intermediate_point = mouse_local;
@@ -342,10 +388,9 @@
                 if (shape instanceof Line) {
                     intermediate_point = shape.end;
                 } else if (shape instanceof Arc) {
-                    intermediate_point = new Local3(
+                    intermediate_point = new Local2(
                         shape.centre.x + shape.radius * Math.cos(-Arc.NEtoXY(shape.theta0 + shape.dangle)),
                         shape.centre.y + shape.radius * Math.sin(-Arc.NEtoXY(shape.theta0 + shape.dangle)),
-                        shape.centre.z
                     );
                 }
             }
@@ -353,11 +398,6 @@
             tool = "Empty";
             intermediate_point = undefined;
             has_moved_away = false;
-        } else if (event.key == "c") {
-            editing_mode = "Create";
-        } else if (event.key == "e") {
-            close_path();
-            editing_mode = "Edit";
         } else if (event.key == "1" && viewer) {
             viewer.camera.cancelFlight();
             viewer.camera.flyTo({
@@ -380,8 +420,7 @@
             const ellipsoid = viewer.scene.ellipsoid;
             const cartesian = viewer.camera.pickEllipsoid(new Cartesian3(mouseX, mouseY), ellipsoid);
             if (!cartesian) return; // just ignore an invalid position
-            let local = Local3.fromCartesian(cartesian);
-            local.z = 0;
+            let local = Local2.fromCartesian(cartesian);
             let s = shapes[drag_object.shape_index];
             if (s instanceof Line) {
                 if (drag_object.point_index == 0) {
@@ -397,7 +436,7 @@
                         point = s.end;
                     }
                     // TODO actually project this onto a line normal to the line...
-                    s.width[index] = Local3.distance(point, local);
+                    s.width[index] = Local2.distance(point, local);
                 }
             } else if (s instanceof Arc) {
                 if (drag_object.point_index == 0) {
@@ -414,7 +453,7 @@
                         a = s.get_endpoint_local("Start");
                         b = local;
                     }
-                    const r = Local3.distance(local, s.centre);
+                    const r = Local2.distance(local, s.centre);
                     const new_s = Arc.from_centre_and_points(s.centre, a, b, s.dangle < 0 ? -1 : 1, r);
                     shapes[drag_object.shape_index] = new_s;
                     shapes[drag_object.shape_index].width = s.width;
@@ -427,7 +466,7 @@
                         point = s.get_endpoint_local("End");
                     }
                     // TODO actually project this onto a line normal to the arc...
-                    s.width[index] = Local3.distance(point, local);
+                    s.width[index] = Local2.distance(point, local);
                 }
             }
             // update adjacent widths to maintain C0 continuity
@@ -448,26 +487,10 @@
             converge_path(shapes, (new_shapes) => {
                 shapes = new_shapes;
             });
-
-            if (editing_mode == "Edit") {
-                close_path();
-            }
         }
     }
 
     function draw_tooltip(nx: number, ny: number) {
-        if (ctx && editing_mode == "Create") {
-            ctx.strokeStyle = "red";
-            const x = nx;
-            const y = ny - 16;
-            let d = 6;
-            ctx.beginPath();
-            ctx.moveTo(x - d, y);
-            ctx.lineTo(x + d, y);
-            ctx.moveTo(x, y + d);
-            ctx.lineTo(x, y - d);
-            ctx.stroke();
-        }
         if (tool === "Empty") {
             return;
         }

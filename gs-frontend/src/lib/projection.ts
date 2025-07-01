@@ -1,6 +1,6 @@
 
 import { Cartesian3, Cartographic } from 'cesium';
-import { Local3 } from "$lib/geometry";
+import { Local2 } from "$lib/geometry";
 
 /// https://gist.github.com/govert/1b373696c9a27ff4c72a
 // WGS-84 geodetic constants
@@ -12,7 +12,7 @@ const e_sq = f * (2 - f);    // Square of Eccentricity
 // Converts the Earth-Centered Earth-Fixed (ECEF) coordinates (x, y, z) to 
 // East-North-Up coordinates in a Local Tangent Plane that is centered at the 
 // (WGS-84) Geodetic point (lat0, lon0, h0).
-export function EcefToEnu(ecef: Cartesian3, origin: Cartographic): Local3 {
+export function EcefToEnu(ecef: Cartesian3, origin: Cartographic): Local2 {
     const lambda = origin.latitude;
     const phi = origin.longitude;
     const s = Math.sin(lambda);
@@ -34,14 +34,14 @@ export function EcefToEnu(ecef: Cartesian3, origin: Cartographic): Local3 {
     // This is the matrix multiplication
     const xEast = -sin_phi * xd + cos_phi * yd;
     const yNorth = -cos_phi * sin_lambda * xd - sin_lambda * sin_phi * yd + cos_lambda * zd;
-    const zUp = cos_lambda * cos_phi * xd + cos_lambda * sin_phi * yd + sin_lambda * zd;
-    return new Local3(xEast, yNorth, zUp);
+    // const zUp = cos_lambda * cos_phi * xd + cos_lambda * sin_phi * yd + sin_lambda * zd;
+    return new Local2(xEast, yNorth);
 }
 
 // Inverse of EcefToEnu. Converts East-North-Up coordinates (xEast, yNorth, zUp) in a
 // Local Tangent Plane that is centered at the (WGS-84) Geodetic point (lat0, lon0, h0)
 // to the Earth-Centered Earth-Fixed (ECEF) coordinates (x, y, z).
-export function EnuToEcef(local: Local3, origin: Cartographic): Cartesian3 {
+export function EnuToEcef(local: Local2, origin: Cartographic): Cartesian3 {
     var lambda = origin.latitude;
     var phi = origin.longitude;
     var s = Math.sin(lambda);
@@ -56,9 +56,9 @@ export function EnuToEcef(local: Local3, origin: Cartographic): Cartesian3 {
     const y0 = (origin.height + N) * cos_lambda * sin_phi;
     const z0 = (origin.height + (1 - e_sq) * N) * sin_lambda;
 
-    const xd = -sin_phi * local.x - cos_phi * sin_lambda * local.y + cos_lambda * cos_phi * local.z;
-    const yd = cos_phi * local.x - sin_lambda * sin_phi * local.y + cos_lambda * sin_phi * local.z;
-    const zd = cos_lambda * local.y + sin_lambda * local.z;
+    const xd = -sin_phi * local.x - cos_phi * sin_lambda * local.y;
+    const yd = cos_phi * local.x - sin_lambda * sin_phi * local.y;
+    const zd = cos_lambda * local.y;
 
     const x = xd + x0;
     const y = yd + y0;

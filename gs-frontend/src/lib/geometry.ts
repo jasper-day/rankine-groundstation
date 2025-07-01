@@ -13,7 +13,7 @@ const TRI_SIZE = 10;
 // may be premature optimisation but cesium does it so i will too
 let scratchc3_a: Cartesian3 = new Cartesian3();
 let scratchc3_b: Cartesian3 = new Cartesian3();
-let scratchc2: Cartesian2 = new Cartesian2();
+// let scratchc2: Cartesian2 = new Cartesian2();
 
 export function quaternion_to_RPY(q: { w: number; x: number; y: number; z: number; }) {
     // https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
@@ -36,15 +36,13 @@ export function quaternion_to_RPY(q: { w: number; x: number; y: number; z: numbe
 }
 
 
-export class Local3 {
+export class Local2 {
     _x: number;
     _y: number;
-    _z: number;
     _cache_c3: Cartesian3 | undefined = undefined;
-    constructor(x: number, y: number, z: number) {
+    constructor(x: number, y: number) {
         this._x = x;
         this._y = y;
-        this._z = z;
     }
     toCartesian(): Cartesian3 {
         if (this._cache_c3 === undefined) {
@@ -52,7 +50,7 @@ export class Local3 {
         }
         return this._cache_c3;
     }
-    static fromCartesian(c: Cartesian3): Local3 {
+    static fromCartesian(c: Cartesian3): Local2 {
         return EcefToEnu(c, ORIGIN);
     }
     set x(x: number) {
@@ -63,62 +61,53 @@ export class Local3 {
         this._y = y;
         this._cache_c3 = undefined;
     }
-    set z(z: number) {
-        this._z = z;
-        this._cache_c3 = undefined;
-    }
     get x(): number {
         return this._x;
     }
     get y(): number {
         return this._y;
     }
-    get z(): number {
-        return this._z;
+
+    add(p: Local2): Local2 {
+        return new Local2(p.x + this._x, p.y + this._y);
     }
 
-    add(p: Local3): Local3 {
-        return new Local3(p.x + this._x, p.y + this._y, p.z + this._z);
+    sub(p: Local2): Local2 {
+        return new Local2(this._x - p.x, this._y - p.y);
     }
 
-    sub(p: Local3): Local3 {
-        return new Local3(this._x - p.x, this._y - p.y, this._z - p.z);
+    dot(p: Local2): number {
+        return this._x * p.x + this._y * p.y;
     }
 
-    dot(p: Local3): number {
-        return this._x * p.x + this._y * p.y + this._z * p.z;
-    }
-
-    mul(s: number): Local3 {
-        return new Local3(this._x * s, this._y * s, this._z * s);
+    mul(s: number): Local2 {
+        return new Local2(this._x * s, this._y * s);
     }
     mag(): number {
-        return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
+        return Math.sqrt(this.x * this.x + this.y * this.y);
     }
     mag2(): number {
-        return this.x * this.x + this.y * this.y + this.z * this.z;
+        return this.x * this.x + this.y * this.y;
     }
 
-    static distance(a: Local3, b: Local3): number {
+    static distance(a: Local2, b: Local2): number {
         const dx = a.x - b.x;
         const dy = a.y - b.y;
-        const dz = a.z - b.z;
-        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        return Math.sqrt(dx * dx + dy * dy);
     }
 
     normalise() {
         const inv_mag = 1.0 / this.mag();
         this.x *= inv_mag;
         this.y *= inv_mag;
-        this.z *= inv_mag;
     }
 }
 
 export class Line {
-    start: Local3;
-    end: Local3;
+    start: Local2;
+    end: Local2;
     width: [number, number, number, number]; // left - right, front - back
-    constructor(start: Local3, end: Local3) {
+    constructor(start: Local2, end: Local2) {
         this.start = start;
         this.end = end;
         this.width = [20, 20, 20, 20];
@@ -180,20 +169,20 @@ export class Line {
     allowed_area_handle_points(v: Viewer): [Cartesian2, Cartesian2, Cartesian2, Cartesian2] {
         const a = this.start;
         const b = this.end;
-        const dir = new Local3(b.x - a.x, b.y - a.y, b.z - a.z);
+        const dir = new Local2(b.x - a.x, b.y - a.y);
         dir.normalise();
 
-        const norm = new Local3(dir.y, -dir.x, 0);
+        const norm = new Local2(dir.y, -dir.x);
 
         const w0_l = this.width[0];
         const w0_r = this.width[1];
         const w1_l = this.width[2];
         const w1_r = this.width[3];
         return [
-            new Local3(a.x - norm.x * w0_l, a.y - norm.y * w0_l, a.z),
-            new Local3(a.x + norm.x * w0_r, a.y + norm.y * w0_r, a.z),
-            new Local3(b.x - norm.x * w1_l, b.y - norm.y * w1_l, b.z),
-            new Local3(b.x + norm.x * w1_r, b.y + norm.y * w1_r, b.z)
+            new Local2(a.x - norm.x * w0_l, a.y - norm.y * w0_l),
+            new Local2(a.x + norm.x * w0_r, a.y + norm.y * w0_r),
+            new Local2(b.x - norm.x * w1_l, b.y - norm.y * w1_l),
+            new Local2(b.x + norm.x * w1_r, b.y + norm.y * w1_r)
         ].map((p) => v.scene.cartesianToCanvasCoordinates(p.toCartesian())) as [
                 Cartesian2,
                 Cartesian2,
@@ -208,10 +197,10 @@ export class Line {
     }
 
     static deserialise(d: any): Line {
-        return new Line(new Local3(d.start[1], d.start[0], 0.0), new Local3(d.end[1], d.end[0], 0.0));
+        return new Line(new Local2(d.start[1], d.start[0]), new Local2(d.end[1], d.end[0]));
     }
 
-    eval(arclength: number): Local3 {
+    eval(arclength: number): Local2 {
         let direction = this.end.sub(this.start)
         let length = this.length()
         let t = Math.min(Math.max(arclength / length, 0), length)
@@ -225,12 +214,12 @@ export class Line {
 }
 
 export class Arc {
-    centre: Local3;
+    centre: Local2;
     radius: number;
     theta0: number; // radians
     dangle: number; // radians, signed
     width: [number, number, number, number];
-    constructor(centre: Local3, radius: number, theta0: number, dangle: number) {
+    constructor(centre: Local2, radius: number, theta0: number, dangle: number) {
         this.centre = centre;
         this.radius = radius;
         this.theta0 = theta0;
@@ -257,12 +246,12 @@ export class Arc {
     }
 
     static deserialise(d: any): Arc {
-        return new Arc(new Local3(d.centre[1], d.centre[0], 0), d.radius, d.heading, d.arclength / d.radius);
+        return new Arc(new Local2(d.centre[1], d.centre[0]), d.radius, d.heading, d.arclength / d.radius);
     }
 
-    static from_centre_and_points(centre: Local3, a: Local3, b: Local3, direction: 1 | -1, rad?: number) {
+    static from_centre_and_points(centre: Local2, a: Local2, b: Local2, direction: 1 | -1, rad?: number) {
         let r;
-        if (rad === undefined) r = Local3.distance(centre, a);
+        if (rad === undefined) r = Local2.distance(centre, a);
         else r = rad;
         // start heading from North to East
         let theta0 = Math.atan2(a.x - centre.x, a.y - centre.y);
@@ -272,7 +261,7 @@ export class Arc {
         return new Arc(centre, r, theta0, direction * arc_length);
     }
 
-    static from_tangent_and_points(tangent: Local3, p1: Local3, p2: Local3) {
+    static from_tangent_and_points(tangent: Local2, p1: Local2, p2: Local2) {
         // https://math.stackexchange.com/a/2464407
         // let points A and B on the circle be (a, b) and (c, d) respectively
         // let m_t be the gradient of the tangent at point A
@@ -312,7 +301,7 @@ export class Arc {
             (a * a * -m_t + 2 * a * (b - d) + m_t * (b * b - 2 * b * d + c * c + d * d)) /
             (2 * (m_t * (c - a) + b - d));
         const y = (-1 / m_t) * (x - a) + b;
-        let centre = new Local3(x, y, p1.z);
+        let centre = new Local2(x, y);
 
         // project location of mouse pointer onto tangent line
         const lineCA = tangent,
@@ -323,7 +312,7 @@ export class Arc {
             // normal distance from CA to B
             distBtoCA = lineCB.sub(distCAtoB),
             // right hand rotation of CA
-            lineCA_rot90_RH = new Local3(-lineCA.y, lineCA.x, lineCA.z),
+            lineCA_rot90_RH = new Local2(-lineCA.y, lineCA.x),
             // which side are we on?
             side = lineCA_rot90_RH.dot(distBtoCA),
             // idk why the direction is opposite
@@ -332,21 +321,20 @@ export class Arc {
         return Arc.from_centre_and_points(centre, p1, p2, dir == 1 ? 1 : -1);
     }
 
-    get_endpoint_local(which?: "Start" | "End"): Local3 {
+    get_endpoint_local(which?: "Start" | "End"): Local2 {
         let theta = which == "Start" ? this.theta0 : this.theta0 + this.dangle;
         const theta_XY = -Arc.NEtoXY(ang_mod(theta));
-        return new Local3(
+        return new Local2(
             this.radius * Math.cos(theta_XY) + this.centre.x,
             this.radius * Math.sin(theta_XY) + this.centre.y,
-            this.centre.z
         );
     }
 
-    tangent_at_endpoint(): Local3 {
+    tangent_at_endpoint(): Local2 {
         // there's a lot of multiplying by -1 here
         // I'm not sure why. but it's all necessary. I think.
         const theta = -Arc.NEtoXY(ang_mod(this.theta0 + this.dangle));
-        return new Local3(Math.sin(theta), -Math.cos(theta), 0).mul(Math.sign(this.dangle));
+        return new Local2(Math.sin(theta), -Math.cos(theta)).mul(Math.sign(this.dangle));
     }
 
     static NEtoXY(angle: number): number {
@@ -371,10 +359,9 @@ export class Arc {
     }
 
     draw_direction_arrow(ctx: CanvasRenderingContext2D, v: Viewer) {
-        const half_theta_pos = new Local3(
+        const half_theta_pos = new Local2(
             this.centre.x + this.radius * Math.cos(Math.PI / 2 - this.half_theta()),
             this.centre.y + this.radius * Math.sin(Math.PI / 2 - this.half_theta()),
-            this.centre.z
         );
 
         const half_theta_screen = v.scene.cartesianToCanvasCoordinates(half_theta_pos.toCartesian());
@@ -447,7 +434,7 @@ export class Arc {
         const vertex = (theta: number, first?: boolean) => {
             const local_x = this.radius * Math.cos(Math.PI / 2 - theta) + this.centre.x;
             const local_y = this.radius * Math.sin(Math.PI / 2 - theta) + this.centre.y;
-            const pos = v.scene.cartesianToCanvasCoordinates(new Local3(local_x, local_y, this.centre.z).toCartesian());
+            const pos = v.scene.cartesianToCanvasCoordinates(new Local2(local_x, local_y).toCartesian());
             if (first) ctx.moveTo(pos.x, pos.y);
             else ctx.lineTo(pos.x, pos.y);
         };
@@ -477,7 +464,7 @@ export class Arc {
         const local_x = rad_now * Math.cos(Math.PI / 2 - theta) + this.centre.x;
         const local_y = rad_now * Math.sin(Math.PI / 2 - theta) + this.centre.y;
         const pos = viewer.scene.cartesianToCanvasCoordinates(
-            new Local3(local_x, local_y, this.centre.z).toCartesian()
+            new Local2(local_x, local_y).toCartesian()
         );
         return [pos.x, pos.y];
     }
@@ -506,7 +493,7 @@ export class Arc {
     eval(arclength: number) {
         let arclength_clipped = Math.min(Math.max(arclength, 0), this.length())
         let angle = this.theta0 + arclength_clipped / this.radius * this.dir();
-        let cosines = new Local3(Math.cos(angle), Math.sin(angle), 0)
+        let cosines = new Local2(Math.cos(angle), Math.sin(angle))
         return this.centre.add(cosines.mul(this.radius))
     }
 
@@ -522,7 +509,7 @@ export class Arc {
 export type DubinsPath = (Arc | Line)[];
 
 export function path_eval(path: DubinsPath, arclength: number) {
-    if (path.length == 0) return new Local3(0, 0, 0);
+    if (path.length == 0) return new Local2(0, 0);
     let lengths = path.map((o) => o.length());
     let i = 0;
     while (i != path.length) {
@@ -534,7 +521,7 @@ export function path_eval(path: DubinsPath, arclength: number) {
     }
     if (i == path.length) {
         // final element is guaranteed to exist by entry guard
-        return path.at(-1)?.eval(path.at(-1)?.length() as number) as Local3;
+        return path.at(-1)?.eval(path.at(-1)?.length() as number) as Local2;
     }
     return path[i].eval(arclength);
 }
@@ -569,10 +556,10 @@ function ang_mod2(a: number): number {
     return a;
 }
 
-export function make_line(start: Local3, prev_shape: Line | Arc | undefined, mouse_local: Local3): Line {
+export function make_line(start: Local2, prev_shape: Line | Arc | undefined, mouse_local: Local2): Line {
     let end;
     if (prev_shape !== undefined) {
-        const dist = Local3.distance(start, mouse_local);
+        const dist = Local2.distance(start, mouse_local);
         let dir;
         if (prev_shape instanceof Line) {
             dir = prev_shape.end.sub(prev_shape.start);
@@ -588,15 +575,15 @@ export function make_line(start: Local3, prev_shape: Line | Arc | undefined, mou
 }
 
 export function make_arc(
-    start: Local3,
+    start: Local2,
     prev_shape: Line | Arc | undefined,
-    mouse_local: Local3
-): [Arc, Local3] | undefined {
+    mouse_local: Local2
+): [Arc, Local2] | undefined {
     const p1 = start;
     const p2 = mouse_local;
 
     // Points are too close, can't make an arc
-    if (Local3.distance(p1, p2) < 0.01) return undefined;
+    if (Local2.distance(p1, p2) < 0.01) return undefined;
 
     let tangent;
     if (prev_shape === undefined) {

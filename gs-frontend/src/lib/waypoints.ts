@@ -3,7 +3,13 @@ import { Cartesian3, Ellipsoid } from "cesium";
 export enum Coord_Type {
     RUNWAY, GEOFENCE, WAYPOINT, PAYLOAD
 };
-export type BMFA_Coords = {"name": string; "latitude": number, "longitude": number, "type": Coord_Type;}
+
+export interface BMFA_Coords {
+    name: string;
+    latitude: number;
+    longitude: number;
+    type: Coord_Type;
+}
 
 export function get_cartesians(coordinates: BMFA_Coords[]) {
     const degrees_heights_array = coordinates

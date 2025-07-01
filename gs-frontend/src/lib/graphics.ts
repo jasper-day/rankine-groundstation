@@ -1,7 +1,7 @@
 import { Cartesian2, Cartesian3, Ellipsoid, type Viewer } from "cesium";
 import type { IMavData } from "./mav";
 import type { MpccInterfaces } from "./rostypes/ros_msgs";
-import { Arc, HANDLE_POINT_RADIUS, Line, Local3, make_line, type DubinsPath } from "./geometry";
+import { Arc, HANDLE_POINT_RADIUS, Line, Local2, make_line, type DubinsPath } from "./geometry";
 import { Coord_Type, get_cartesians, type BMFA_Coords } from "./waypoints";
 
 const scratchc3_a = new Cartesian3();
@@ -41,9 +41,9 @@ export function draw_mav_history(history: IMavData[], current: IMavData, plan: M
         ctx.strokeStyle = "blue";
         ctx.fillStyle = "#ffd040";
         ctx.beginPath();
-        let local: Local3 | null = null;
+        let local: Local2 | null = null;
         for (let i = 0; i != plan.north.length; i++) {
-            local = new Local3(plan.east[i], plan.north[i], 100);
+            local = new Local2(plan.east[i], plan.north[i]);
             let b = viewer.scene.cartesianToCanvasCoordinates(local.toCartesian(), scratchc3_b);
             i == 0 ? ctx.moveTo(a.x, a.y) : ctx.lineTo(b.x, b.y);
         }
@@ -71,12 +71,11 @@ export function draw_mav_history(history: IMavData[], current: IMavData, plan: M
     ctx.restore();
 }
 
-export function draw_intermediate_shape(viewer: Viewer, intermediate_point: Local3, ctx: CanvasRenderingContext2D, mouseX: number, mouseY: number, has_moved_away: boolean, tool: string, shapes: DubinsPath) {
+export function draw_intermediate_shape(viewer: Viewer, intermediate_point: Local2, ctx: CanvasRenderingContext2D, mouseX: number, mouseY: number, has_moved_away: boolean, tool: string, shapes: DubinsPath) {
     // TODO costly operation to undo later on...
     const mouse_cartesian = viewer.camera.pickEllipsoid(new Cartesian3(mouseX, mouseY), viewer.scene.ellipsoid);
     if (!mouse_cartesian) return;
-    const mouse_local = Local3.fromCartesian(mouse_cartesian);
-    mouse_local.z = 100; // for now, we define the path always at 100m above surface
+    const mouse_local = Local2.fromCartesian(mouse_cartesian);
 
     const c = viewer.scene.cartesianToCanvasCoordinates(intermediate_point.toCartesian(), scratchc3_a);
     if (Cartesian2.distance(c, new Cartesian2(mouseX, mouseY)) < 5) {
@@ -96,7 +95,7 @@ export function draw_intermediate_shape(viewer: Viewer, intermediate_point: Loca
         const p1 = intermediate_point;
         const p2 = mouse_local;
         // Points are too close, can't make an arc
-        if (Local3.distance(p1, p2) < 0.01) return;
+        if (Local2.distance(p1, p2) < 0.01) return;
 
         const line = shapes[shapes.length - 1];
         let tangent;

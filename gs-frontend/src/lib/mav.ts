@@ -231,7 +231,7 @@ function updateTrajectoryPlan(msg: MpccInterfaces.TrajectoryPlan) {
 
 const ros = open_ros(
     // "ws://126.158.118:9090",
-    "ws://localhost:9090",
+    "ws://192.168.67.63:9090",
 
     onRosConnect,
 
