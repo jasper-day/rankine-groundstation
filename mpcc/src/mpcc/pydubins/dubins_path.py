@@ -76,11 +76,11 @@ class DubinsPath:
             distance = segment_i.end_with(params_i) - segment_ii.start_with(params_ii)
             assert distance.shape == (2,)
             # resid = distance @ distance
-            output = output.at[i].set(distance.dot(distance))
+            output[i] = (distance.dot(distance))
             heading_diff = segment_i.heading_end_with(
                 params_i
             ) - segment_ii.heading_start_with(params_ii)
-            output = output.at[n_points + i].set(
+            output[n_points + i] = (
                 np.pow(np.sin(heading_diff / 2.0), 2)
             )
             # move index forward

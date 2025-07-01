@@ -2586,6 +2586,20 @@ export namespace MavrosMsgs {
 }
 
 export namespace MpccInterfaces {
+  export interface ConvergePath {
+    request: MpccInterfaces.ConvergePathRequest;
+    response: MpccInterfaces.ConvergePathResponse;
+  }
+
+  export interface ConvergePathRequest {
+    path: string;
+  }
+
+  export interface ConvergePathResponse {
+    path: string;
+    converged: boolean;
+  }
+
   export interface GetPath {
     response: MpccInterfaces.GetPathResponse;
   }
@@ -2598,6 +2612,16 @@ export namespace MpccInterfaces {
   export interface Path {
     newpath: string;
     origin: GeographicMsgs.GeoPoint;
+    altitude: number;
+  }
+
+  export interface SegmentType {
+    type: SegmentTypeType;
+  }
+  
+  export enum SegmentTypeType {
+    LINE = 0,
+    ARC = 1,
   }
 
   export interface SetPath {
@@ -2641,11 +2665,16 @@ export namespace MpccInterfaces {
     state: MpccInterfaces.State;
   }
 
+  export interface SystemId {
+    roll_angle: number;
+    commanded_roll: number;
+  }
+
   export interface TrajectoryPlan {
-    norths: number[];
-    easts: number[];
-    headings: number[];
-    bank_angles: number[];
+    north: number[];
+    east: number[];
+    heading: number[];
+    bank_angle: number[];
   }
 }
 

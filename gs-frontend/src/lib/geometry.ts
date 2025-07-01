@@ -32,7 +32,7 @@ export function quaternion_to_RPY(q: { w: number; x: number; y: number; z: numbe
         yaw: Math.atan2(2 * (xy + wz), 1 - 2 * (yy + zz)), // Heading / Yaw
         pitch: -asin(2 * (xz - wy)), // Attitude / Pitch
         roll: Math.atan2(2 * (yz + wx), 1 - 2 * (xx + yy)), // Bank / Roll
-};
+    };
 }
 
 
@@ -209,6 +209,18 @@ export class Line {
 
     static deserialise(d: any): Line {
         return new Line(new Local3(d.start[1], d.start[0], 0.0), new Local3(d.end[1], d.end[0], 0.0));
+    }
+
+    eval(arclength: number): Local3 {
+        let direction = this.end.sub(this.start)
+        let length = this.length()
+        let t = Math.min(Math.max(arclength / length, 0), length)
+        return this.start.add(direction.mul(t))
+    }
+
+    length(): number {
+        let direction = this.end.sub(this.start);
+        return Math.sqrt(Math.pow(direction.x, 2) + Math.pow(direction.y, 2))
     }
 }
 
@@ -490,7 +502,57 @@ export class Arc {
         this.draw_direction_arrow(ctx, viewer);
         // this.draw_allowed_region(ctx, viewer);
     }
+
+    eval(arclength: number) {
+        let arclength_clipped = Math.min(Math.max(arclength, 0), this.length())
+        let angle = this.theta0 + arclength_clipped / this.radius * this.dir();
+        let cosines = new Local3(Math.cos(angle), Math.sin(angle), 0)
+        return this.centre.add(cosines.mul(this.radius))
+    }
+
+    length() {
+        return Math.abs(this.dangle) * this.radius
+    }
+
+    dir() {
+        return this.dangle > 0 ? 1 : -1;
+    }
 }
+
+export type DubinsPath = (Arc | Line)[];
+
+export function path_eval(path: DubinsPath, arclength: number) {
+    if (path.length == 0) return new Local3(0, 0, 0);
+    let lengths = path.map((o) => o.length());
+    let i = 0;
+    while (i != path.length) {
+        if (arclength < lengths[i]) {
+            break;
+        }
+        arclength -= lengths[i];
+        ++i;
+    }
+    if (i == path.length) {
+        // final element is guaranteed to exist by entry guard
+        return path.at(-1)?.eval(path.at(-1)?.length() as number) as Local3;
+    }
+    return path[i].eval(arclength);
+}
+
+export function deserialise_path(path: string) {
+    return JSON.parse(path).map((ds: any) => {
+        if (ds.type == "arc") {
+            return Arc.deserialise(ds);
+        } else if (ds.type == "line") {
+            return Line.deserialise(ds);
+        }
+    });
+}
+
+export function serialise_path(path: DubinsPath) {
+    return JSON.stringify(path.map(sh => sh.serialise()));
+}
+
 export function angle_delta(theta0: number, theta1: number): number {
     // this is awful and slow
     // why is it so hard to find the signed difference between two angles??

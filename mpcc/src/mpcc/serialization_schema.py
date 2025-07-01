@@ -66,7 +66,15 @@ Path = list[Union[Arc, Line]]
 
 def to_dubins(path: Path) -> tuple[DubinsPath, list[Segment]]:
     segments = [segment.to_dubins() for segment in path]
-    return DubinsPath(segments), segments
+    return DubinsPath(segments)
+
+def json2dubins(input: str):
+    path = path_adapter.validate_json(input)
+    return to_dubins(path)
+
+def dubins2json(input: DubinsPath):
+    path = to_path(input, input.get_params())
+    return path_adapter.dump_json(path).decode("utf-8")
 
 
 def to_path(dubins: DubinsPath, params: np.ndarray[np.float64]) -> Path:

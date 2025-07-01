@@ -24,7 +24,7 @@ class Segment:
 
     def start(self) -> Vec2:
         "Starting coordinates of the segment"
-        raise NotImplementedError()
+        return self.eval(0.0)
 
     @staticmethod
     def start_with(params: np.ndarray) -> Vec2:
@@ -33,7 +33,7 @@ class Segment:
 
     def end(self) -> Vec2:
         "End coordinates of the segment"
-        raise NotImplementedError()
+        return self.eval(self.length())
 
     @staticmethod
     def end_with(params: np.ndarray) -> float:
@@ -94,27 +94,27 @@ class LineSegment(Segment):
     def length(self) -> float:
         return np.linalg.norm(self._end - self._start)
 
-    def start(self) -> Vec2:
-        return self._start
+    def start(self):
+        return super().start()
 
     @staticmethod
     def start_with(params):
         return params[:2]
 
-    def end(self) -> Vec2:
-        return self._end
+    def end(self):
+        return super().end()
 
     @staticmethod
     def end_with(params):
         return params[2:]
 
     def heading_start(self) -> float:
-        direction = self._end - self._start
-        return np.atan2(direction[1], direction[0])
+        d = self._end - self._start
+        return np.atan2(d[1], d[0])
 
     @staticmethod
     def heading_start_with(params):
-        direction = params[2:] - params[:2]
+        direction = LineSegment.end_with(params) - LineSegment.start_with(params)
         return np.atan2(direction[1], direction[0])
 
     def heading_end(self) -> float:

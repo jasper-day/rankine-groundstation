@@ -1,0 +1,5 @@
+debug = 0
+max_iter = 50
+line_search = true
+tolerance = 1e-4
+epsilon = 1e-8

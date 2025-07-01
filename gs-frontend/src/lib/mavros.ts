@@ -1,4 +1,5 @@
 import ROSLIB from "roslib"
+import type { DubinsPath } from "./geometry";
 
 export function open_ros(url: string, onconnect: ()=>void, onerror: ()=>void, onclose: ()=>void) {
     var ros = new ROSLIB.Ros(
@@ -9,4 +10,3 @@ export function open_ros(url: string, onconnect: ()=>void, onerror: ()=>void, on
     ros.on("close", onclose);
     return ros;
 }
-

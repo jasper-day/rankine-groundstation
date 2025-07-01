@@ -10,7 +10,7 @@ import {
     type StdSrvs
 } from "$lib/rostypes/ros_msgs";
 import { open_ros } from "$lib/mavros";
-import { ORIGIN, type Arc, type Line } from "./geometry";
+import { Arc, deserialise_path, Line, ORIGIN, serialise_path, type DubinsPath } from "./geometry";
 
 export interface IMavData {
     batteryData?: SensorMsgs.BatteryState;
@@ -116,12 +116,12 @@ function onRosConnect() {
         }
     }, 20);
 
-    statusListener = new ROSLIB.Topic({
+    status_listener = new ROSLIB.Topic({
         ros: ros,
         name: "mavros/statustext/recv",
         messageType: "mavros_msgs/msg/StatusText"
     });
-    statusListener.subscribe(updateStatusText);
+    status_listener.subscribe(updateStatusText);
 
     trajectory_plan_listener = new ROSLIB.Topic({
         ros: ros,
@@ -130,54 +130,57 @@ function onRosConnect() {
     });
     trajectory_plan_listener.subscribe(updateTrajectoryPlan);
 
-    armVehicle = new ROSLIB.Service({
+    arm_vehicle = new ROSLIB.Service({
         ros: ros,
-        name: "gs/try_arm",
-        serviceType: "std_srvs/srv/SetBool"
+        name: "/mavros/cmd/arming",
+        serviceType: "mavros_msgs/srv/CommandBool"
     });
 
-    setPathService = new ROSLIB.Service({
+    set_path_service = new ROSLIB.Service({
         ros: ros,
         name: "gs/set_path",
         serviceType: "mpcc_interfaces/srv/SetPath"
     });
 
-    setParameterService = new ROSLIB.Service({
-        ros: ros, 
+    set_parameter_service = new ROSLIB.Service({
+        ros: ros,
         name: "mavros/param/set",
         serviceType: "mavros_msgs/srv/ParamSetV2"
     })
-    
+
+    path_drag_client = new ROSLIB.Service({
+        ros: ros,
+        name: "gs/converge_path",
+        serviceType: "mpcc_interfaces/srv/ConvergePath"
+    })
 }
 
 export function enableArm() {
-    if (armVehicle) {
-        const req: StdSrvs.SetBoolRequest = {
-            data: true
+    if (arm_vehicle) {
+        const req: MavrosMsgs.CommandBoolRequest = {
+            value: true
         };
-        armVehicle.callService(req, function (result: StdSrvs.SetBoolResponse) {
+        arm_vehicle.callService(req, function (result: MavrosMsgs.CommandBoolResponse) {
             console.log("Attempting arm");
             console.log("Success", result.success);
-            console.log("Response", result.message);
         });
     }
 }
 
 export function cancelArm() {
-    if (armVehicle) {
-        const req: StdSrvs.SetBoolRequest = {
-            data: false
+    if (arm_vehicle) {
+        const req: MavrosMsgs.CommandBoolRequest = {
+            value: false
         };
-        armVehicle.callService(req, function (result: StdSrvs.SetBoolResponse) {
+        arm_vehicle.callService(req, function (result: MavrosMsgs.CommandBoolResponse) {
             console.log("Attempting disarm");
             console.log("Success", result.success);
-            console.log("Response", result.message);
         });
     }
 }
 
 export function terminate() {
-    if (setParameterService) {
+    if (set_parameter_service) {
         const req: MavrosMsgs.ParamSetV2Request = {
             force_set: true,
             param_id: "AFS_TERMINATE",
@@ -186,7 +189,7 @@ export function terminate() {
                 integer_value: 1
             }
         }
-        setParameterService.callService(req, (res: MavrosMsgs.ParamSetV2Response) => {
+        set_parameter_service.callService(req, (res: MavrosMsgs.ParamSetV2Response) => {
             console.log("Flight terminated", res.success);
         })
 
@@ -195,8 +198,12 @@ export function terminate() {
     }
 }
 
+export function setGeoFence() {
+
+}
+
 export function sendPath(shapes: (Line | Arc)[]) {
-    if (setPathService) {
+    if (set_path_service) {
         const origin: GeographicMsgs.GeoPoint = {
             latitude: (ORIGIN.latitude * 180) / Math.PI, // must be in degrees
             longitude: (ORIGIN.longitude * 180) / Math.PI,
@@ -210,7 +217,7 @@ export function sendPath(shapes: (Line | Arc)[]) {
         const req: MpccInterfaces.SetPathRequest = {
             newpath: path
         };
-        setPathService.callService(req, function (res: MpccInterfaces.SetPathResponse) {
+        set_path_service.callService(req, function (res: MpccInterfaces.SetPathResponse) {
             console.log("Sent path");
             console.log("Success", res.success);
             console.log(res.error_msg);
@@ -247,13 +254,26 @@ export function get_trajectory_plan(): MpccInterfaces.TrajectoryPlan | null {
     return trajectory_plan;
 }
 
-let statusListener: ROSLIB.Topic | null = null,
-    armVehicle: ROSLIB.Service | null = null,
-    setPathService: ROSLIB.Service | null = null,
-    setParameterService: ROSLIB.Service | null = null,
+export function converge_path(shapes: DubinsPath, callback: (path: DubinsPath) => void) {
+    if (!path_drag_client) return;
+    let req: MpccInterfaces.ConvergePathRequest = {
+        path: serialise_path(shapes)
+    }
+    path_drag_client?.callService(req, (res: MpccInterfaces.ConvergePathResponse) => {
+        console.log(res.converged)
+        callback(deserialise_path(res.path) as DubinsPath)
+    });
+
+}
+
+let status_listener: ROSLIB.Topic | null = null,
+    arm_vehicle: ROSLIB.Service | null = null,
+    set_path_service: ROSLIB.Service | null = null,
+    set_parameter_service: ROSLIB.Service | null = null,
     trajectory_plan_listener: ROSLIB.Topic | null = null,
     trajectory_plan: MpccInterfaces.TrajectoryPlan | null = null;
 
+let path_drag_client: ROSLIB.Service | null = null;
+
 let mav_data: IMavData = {};
 let mav_data_history: IMavData[] = [];
-

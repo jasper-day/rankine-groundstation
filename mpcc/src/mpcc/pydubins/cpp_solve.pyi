@@ -1,3 +1,4 @@
+from enum import Enum
 import numpy as np
 from typing import Callable
 
@@ -12,11 +13,12 @@ class SolverConfig:
     line_search: bool
     tolerance: float
 
-def solve(
-    n: int,
-    m: int,
+def solve_path(
     config: SolverConfig,
     p_start: np.ndarray,
-    residual_fn: Callable[[np.ndarray], np.ndarray],
-    jacobian_fn: Callable[[np.ndarray], np.ndarray],
+    types: list[CPPSegmentType]
 ) -> SolverResult: ...
+
+class CPPSegmentType(Enum):
+    LINE: int
+    CIRCLE: int

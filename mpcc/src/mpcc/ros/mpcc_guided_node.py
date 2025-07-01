@@ -432,7 +432,7 @@ class MPCCGuidedNode(Node):
         )
         waypoint_list[-1].command = CommandCode.NAV_LAND
         waypoint_list[-1].z_alt = 0.0
-        self.get_logger().info(repr(waypoint_list))
+        self.get_logger().info(waypoint_list)
 
         wp_clear_req = WaypointClear.Request()
         wp_set_req = WaypointPush.Request()

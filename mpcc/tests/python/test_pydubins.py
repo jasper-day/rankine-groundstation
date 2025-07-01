@@ -81,7 +81,7 @@ def test_constraint_residuals():
     assert path.get_constraint_residuals(path.get_params()) == approx(np.zeros(8))
     altered_params = path.get_params()
     # change endpoint of first line, now pointing at 45°
-    altered_params = altered_params.at[2].set(30.0)
+    altered_params[2] = 30.0
     expected_residuals = np.zeros(8)
     # location, then heading residuals
     expected_residuals[0] = 20.0**2
@@ -182,3 +182,4 @@ def test_types():
         SegmentType.CIRCULARSEGMENT,
         SegmentType.CIRCULARSEGMENT,
     ]
+

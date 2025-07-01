@@ -10,30 +10,7 @@
     // fix plane indicator same problem as above
 
     // drag plane??
-    // Jasper Day: Controller / frontend integration:
-    // Frontend sends information to the controller in the form of a Dubins path
-    // Controller sends information to the frontend in the form of
-    // - list of positions over the next 6 seconds (continually updated)
-    // - Current (simulated) position of the airplane
-    // Jasper Day: So we need:
-    // - A schema to pass this data back and forth (just some long arrays)
-
-    // Jasper Day: idea (not final)
-    // {
-    // curr_pos: number[2],
-    // projected_pos: number[60],
-    // // other things
-    // heading: number
-    // commanded roll angle: number
-    // actual roll angle: number
-    // timestep: number
-    // currentArclengthAlongPath: number
-    // ...
-    // }
-    //
-    //
     // Export to json
-    // soft disable regions
     // mode annunciator display
     import "cesium/Build/Cesium/Widgets/widgets.css";
 
@@ -56,7 +33,9 @@
         ORIGIN,
         quaternion_to_RPY,
         make_line,
-        make_arc
+        make_arc,
+        serialise_path,
+        deserialise_path
     } from "$lib/geometry";
     import { draw_horizon } from "$lib/pfd";
     import "cesium/Build/Cesium/Widgets/widgets.css";
@@ -64,6 +43,7 @@
     import SensorView from "$lib/SensorView.svelte";
     import {
         cancelArm,
+        converge_path,
         enableArm,
         get_current_mav_data,
         get_mav_data_history,
@@ -74,6 +54,7 @@
     } from "$lib/mav";
     import { MpccInterfaces } from "$lib/rostypes/ros_msgs";
     import { Coord_Type, get_cartesians, to_czml, type BMFA_Coords } from "$lib/waypoints";
+    import { browser } from "$app/environment";
 
     Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN;
 
@@ -316,7 +297,7 @@
                     geofence = coordinates.filter((coord) => coord.type == Coord_Type.GEOFENCE);
                     waypoints = coordinates.filter((coord) => coord.type == Coord_Type.WAYPOINT);
                     payload = coordinates.find((coord) => coord.type == Coord_Type.PAYLOAD) ?? null;
-                    const waypoint_czml = waypoints?.map((wp) => to_czml(wp));
+                    const waypoint_czml: object[] = waypoints?.map((wp) => to_czml(wp));
                     waypoint_czml?.unshift({
                         id: "document",
                         name: "Waypoints",
@@ -409,6 +390,17 @@
         // Chrome doesn't support mouse events
         viewer.cesiumWidget.canvas.addEventListener("pointerdown", mousedown);
         viewer.cesiumWidget.canvas.addEventListener("pointerup", mouseup);
+
+
+        let shapes_serialised = localStorage.getItem('path');
+        if (shapes_serialised) {
+            console.log(shapes_serialised);
+            shapes = deserialise_path(shapes_serialised);
+        }
+
+        setInterval(
+            () => localStorage.setItem('path', serialise_path(shapes))
+        )
     });
 
     let drag_object: { shape_index: number; point_index: number } | undefined = undefined;
@@ -423,7 +415,7 @@
             const mouse_local = Local3.fromCartesian(cartesian);
             mouse_local.z = 100; // for now, we define the path always at 100m above surface
 
-            if (tool == "Line") {
+            if (tool == "Line") {2
                 if (intermediate_point === undefined) {
                     // add first point
                     intermediate_point = mouse_local;
@@ -624,6 +616,12 @@
                     shapes[drag_object.shape_index + 1].width[index - 2] = s.width[index];
                 }
             }
+
+            // converge path once
+
+            converge_path(shapes, (new_shapes) => {
+                shapes = new_shapes;
+            });
 
             if (editing_mode == "Edit") {
                 close_path();
