@@ -13,6 +13,7 @@ class SMState(Enum):
     WP_FOLLOW = 6
     MPCC = 7
     LANDING = 8
+    SYSTEM_IDENTIFICATION = 9
     FTS = 254
     TIMEOUT = 255
 
@@ -79,14 +80,14 @@ class StateMachine:
                 SMState.ARMED,
                 SMState.TAKING_OFF,
                 lambda: self.node.current_state.mode != "TAKEOFF",
-                action=self.node.set_takeoff,
+                action=self.node.set_auto,
                 after=1.0,
             ),
             StateTransition(
                 SMState.TAKING_OFF,
-                SMState.SET_AUTO,
+                SMState.WP_FOLLOW,
                 self.node.takeoff_altitude_reached,
-                action=self.node.set_auto,
+                # action=self.node.set_auto,
                 after=5.0,
             ),
             StateTransition(
@@ -95,6 +96,19 @@ class StateMachine:
                 self.node.mpcc_ready,
                 action=self.node.start_mpcc,
                 after=5.0,
+            ),
+            StateTransition(
+                SMState.SET_AUTO,
+                SMState.SYSTEM_IDENTIFICATION,
+                self.node.system_id_ready,
+                action = self.node.start_system_id,
+                after = 5.0
+            ),
+            StateTransition(
+                SMState.SYSTEM_IDENTIFICATION,
+                SMState.SET_AUTO,
+                self.node.system_id_finished,
+                action = self.node.finish_system_id,
             ),
             StateTransition(
                 SMState.MPCC,
