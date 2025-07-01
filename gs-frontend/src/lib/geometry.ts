@@ -526,6 +526,10 @@ export function path_eval(path: DubinsPath, arclength: number) {
     return path[i].eval(arclength);
 }
 
+export function path_length(path: DubinsPath) {
+    return path.map(segment => segment.length()).reduce((a, b) => a + b, 0);
+}
+
 export function deserialise_path(path: string) {
     return JSON.parse(path).map((ds: any) => {
         if (ds.type == "arc") {

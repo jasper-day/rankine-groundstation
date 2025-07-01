@@ -12,6 +12,10 @@
     // drag plane??
     // Export to json
     // mode annunciator display
+    // scale markings
+    // distance from mouse to nearest waypoint for positioning
+    // export / save paths
+
     import "cesium/Build/Cesium/Widgets/widgets.css";
 
     import {
@@ -24,9 +28,7 @@
         Ellipsoid,
         UrlTemplateImageryProvider,
         CzmlDataSource,
-
         Cartographic
-
     } from "cesium";
     import {
         Arc,
@@ -45,15 +47,17 @@
     import { onMount } from "svelte";
     import SensorView from "$lib/SensorView.svelte";
     import {
-        cancelArm,
+        cancel_arm,
+        clear_geofence,
         converge_path,
-        enableArm,
+        drop_payload,
+        enable_arm,
         get_current_mav_data,
         get_mav_data_history,
         get_trajectory_plan,
-        sendPath,
-        terminate,
-        type IMavData
+        send_waypoints,
+        set_geofence,
+        terminate
     } from "$lib/mav";
     import { Coord_Type, to_czml, type BMFA_Coords } from "$lib/waypoints";
     import { draw_coordinates, draw_intermediate_shape, draw_mav_history } from "$lib/graphics";
@@ -168,7 +172,16 @@
 
                 if (intermediate_point !== undefined) {
                     // some shape is being defined!! draw it
-                    draw_intermediate_shape(viewer, intermediate_point, ctx, mouseX, mouseY, has_moved_away, tool, shapes);
+                    draw_intermediate_shape(
+                        viewer,
+                        intermediate_point,
+                        ctx,
+                        mouseX,
+                        mouseY,
+                        has_moved_away,
+                        tool,
+                        shapes
+                    );
                 }
                 const mav_history = get_mav_data_history();
                 const plan = get_trajectory_plan();
@@ -236,7 +249,7 @@
         const mouse_cart = viewer.camera.pickEllipsoid(new Cartesian3(mouseX, mouseY), ellipsoid);
         let closest_point: Cartesian2 | undefined;
         let closest_point_cart: Cartesian3 | undefined;
-        let closest_dist = 100000000000000000000000000000.0; // TODO infinity
+        let closest_dist = 1e9; // TODO infinity
         const cartesians = Cartesian3.fromDegreesArray(waypoints.flatMap((w) => [w.longitude, w.latitude]));
         for (const c of cartesians) {
             const screen = viewer.scene.cartesianToCanvasCoordinates(c);
@@ -248,7 +261,7 @@
             }
         }
         if (!closest_point || !closest_point_cart || !mouse_cart) return;
-        const dist_metres = Cartesian3.distance(mouse_cart, closest_point_cart)
+        const dist_metres = Cartesian3.distance(mouse_cart, closest_point_cart);
         if (dist_metres > 50) return;
 
         const dash_len = 5;
@@ -270,7 +283,6 @@
             Cartesian2.add(pos, direction, pos);
         }
         ctx.stroke();
-
 
         ctx.beginPath();
         ctx.fillText(dist_metres.toFixed(1), midpoint.x, midpoint.y);
@@ -390,7 +402,7 @@
                 } else if (shape instanceof Arc) {
                     intermediate_point = new Local2(
                         shape.centre.x + shape.radius * Math.cos(-Arc.NEtoXY(shape.theta0 + shape.dangle)),
-                        shape.centre.y + shape.radius * Math.sin(-Arc.NEtoXY(shape.theta0 + shape.dangle)),
+                        shape.centre.y + shape.radius * Math.sin(-Arc.NEtoXY(shape.theta0 + shape.dangle))
                     );
                 }
             }
@@ -543,18 +555,25 @@
 </div>
 <canvas id="canvas" bind:this={canvas}></canvas>
 <div id="cesiumContainer"></div>
-<div class="fixed bottom-4 right-4 z-50 h-64 w-80 overflow-hidden">
+<div class="h-94 fixed bottom-4 right-4 z-50 w-80 overflow-hidden">
     <div class="rounded bg-black/70" style="height: 100%">
         <div id="arm-button" class="grid-columns-3 border-b border-white/20">
-            <button class="btn btn-gray" on:click={enableArm}>Arm</button>
-            <button class="btn btn-gray" on:click={cancelArm}>Cancel&nbsp;Arm</button>
-            <button class="btn btn-gray" on:click={() => sendPath(shapes)}>Send&nbsp;path</button>
-            <button class="btn btn-gray" on:click={setGeoFence}>Send&nbsp;Geofence</button>
+            <button class="btn btn-gray" on:click={enable_arm}>Arm</button>
+            <button class="btn btn-gray" on:click={cancel_arm}>Cancel&nbsp;Arm</button>
+            <button class="btn btn-gray" on:click={() => send_waypoints(shapes, 40)}>Send&nbsp;path</button>
+            <button
+                class="btn btn-gray"
+                on:click={() => {
+                    if (!geofence) return;
+                    clear_geofence;
+                    console.log(geofence);
+                    set_geofence(geofence);
+                }}>Send&nbsp;Geofence</button
+            >
             <button class="btn btn-gray" on:click={terminate}>FTS</button>
+            <button class="btn btn-gray" on:click={drop_payload}>Drop payload</button>
         </div>
-        <div class="border-b border-white/20 p-3">
-            <h3 class="text-sm font-medium text-white">Messages</h3>
-        </div>
+        <div class="border-b border-white/20 p-3"></div>
         <div class="h-full space-y-2 overflow-y-auto p-3" id="status-message-container"></div>
     </div>
 </div>

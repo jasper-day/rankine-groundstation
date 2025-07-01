@@ -9,8 +9,19 @@ import {
     type StdMsgs,
     type StdSrvs
 } from "$lib/rostypes/ros_msgs";
-import { open_ros } from "$lib/mavros";
 import { Arc, deserialise_path, Line, ORIGIN, serialise_path, type DubinsPath } from "./geometry";
+import type { BMFA_Coords } from "./waypoints";
+import { get_dubins_wps, get_geofence_wps } from "./mission";
+
+export function open_ros(url: string, onconnect: () => void, onerror: () => void, onclose: () => void) {
+    var ros = new ROSLIB.Ros(
+        { url: url }
+    );
+    ros.on("connection", onconnect);
+    ros.on("error", onerror);
+    ros.on("close", onclose);
+    return ros;
+}
 
 export interface IMavData {
     batteryData?: SensorMsgs.BatteryState;
@@ -63,22 +74,22 @@ function updateStatusText(message: MavrosMsgs.StatusText) {
         let classes: string[] = ["text-xs"];
         switch (message.severity) {
             case MavrosMsgs.StatusTextSeverity.EMERGENCY:
-                classes.push("text-red", "font-bold");
+                classes.push("text-red-500", "font-bold");
                 break;
             case MavrosMsgs.StatusTextSeverity.ALERT:
-                classes.push("text-red");
+                classes.push("text-red-600");
                 break;
             case MavrosMsgs.StatusTextSeverity.CRITICAL:
-                classes.push("text-red", "font-bold");
+                classes.push("text-red-700", "font-bold");
                 break;
             case MavrosMsgs.StatusTextSeverity.ERROR:
-                classes.push("text-red");
+                classes.push("text-red-500");
                 break;
             case MavrosMsgs.StatusTextSeverity.WARNING:
-                classes.push("text-orange");
+                classes.push("text-orange-500");
                 break;
             case MavrosMsgs.StatusTextSeverity.NOTICE:
-                classes.push("text-yellow");
+                classes.push("text-yellow-500");
                 break;
             case MavrosMsgs.StatusTextSeverity.INFO:
                 classes.push("text-white/90");
@@ -128,7 +139,7 @@ function onRosConnect() {
         name: "gs/trajectory_plan",
         messageType: "mpcc_interfaces/msg/TrajectoryPlan"
     });
-    trajectory_plan_listener.subscribe(updateTrajectoryPlan);
+    trajectory_plan_listener.subscribe(update_trajectory_plan);
 
     arm_vehicle = new ROSLIB.Service({
         ros: ros,
@@ -136,26 +147,58 @@ function onRosConnect() {
         serviceType: "mavros_msgs/srv/CommandBool"
     });
 
-    set_path_service = new ROSLIB.Service({
+    set_path_client = new ROSLIB.Service({
         ros: ros,
         name: "gs/set_path",
         serviceType: "mpcc_interfaces/srv/SetPath"
     });
 
-    set_parameter_service = new ROSLIB.Service({
+    set_parameter_client = new ROSLIB.Service({
         ros: ros,
         name: "mavros/param/set",
         serviceType: "mavros_msgs/srv/ParamSetV2"
-    })
+    });
 
     path_drag_client = new ROSLIB.Service({
         ros: ros,
         name: "gs/converge_path",
         serviceType: "mpcc_interfaces/srv/ConvergePath"
+    });
+
+    // mission and geofence clients
+
+    mission_clear_client = new ROSLIB.Service({
+        ros: ros,
+        name: "/mavros/mission/clear",
+        serviceType: "mavros_msgs/srv/WaypointClear"
+    });
+
+    mission_push_client = new ROSLIB.Service({
+        ros: ros,
+        name: "/mavros/mission/push",
+        serviceType: "mavros_msgs/srv/WaypointPush"
+    });
+
+    mission_set_current_client = new ROSLIB.Service({
+        ros: ros,
+        name: "/mavros/mission/set_current",
+        serviceType: "mavros_msgs/srv/WaypointSetCurrent"
+    });
+
+    geofence_clear_client = new ROSLIB.Service({
+        ros: ros,
+        name: "/mavros/geofence/clear",
+        serviceType: "mavros_msgs/srv/WaypointClear"
+    });
+
+    geofence_push_client = new ROSLIB.Service({
+        ros: ros,
+        name: "/mavros/geofence/push",
+        serviceType: "mavros_msgs/srv/WaypointPush"
     })
 }
 
-export function enableArm() {
+export function enable_arm() {
     if (arm_vehicle) {
         const req: MavrosMsgs.CommandBoolRequest = {
             value: true
@@ -167,7 +210,7 @@ export function enableArm() {
     }
 }
 
-export function cancelArm() {
+export function cancel_arm() {
     if (arm_vehicle) {
         const req: MavrosMsgs.CommandBoolRequest = {
             value: false
@@ -180,7 +223,7 @@ export function cancelArm() {
 }
 
 export function terminate() {
-    if (set_parameter_service) {
+    if (set_parameter_client) {
         const req: MavrosMsgs.ParamSetV2Request = {
             force_set: true,
             param_id: "AFS_TERMINATE",
@@ -189,21 +232,17 @@ export function terminate() {
                 integer_value: 1
             }
         }
-        set_parameter_service.callService(req, (res: MavrosMsgs.ParamSetV2Response) => {
+        set_parameter_client.callService(req, (res: MavrosMsgs.ParamSetV2Response) => {
             console.log("Flight terminated", res.success);
         })
 
     } else {
-        Error("Parameter set service not found")
+        throw new Error("Parameter set service not found")
     }
 }
 
-export function setGeoFence() {
-
-}
-
-export function sendPath(shapes: (Line | Arc)[]) {
-    if (set_path_service) {
+export function send_path(shapes: (Line | Arc)[]) {
+    if (set_path_client) {
         const origin: GeographicMsgs.GeoPoint = {
             latitude: (ORIGIN.latitude * 180) / Math.PI, // must be in degrees
             longitude: (ORIGIN.longitude * 180) / Math.PI,
@@ -217,7 +256,7 @@ export function sendPath(shapes: (Line | Arc)[]) {
         const req: MpccInterfaces.SetPathRequest = {
             newpath: path
         };
-        set_path_service.callService(req, function (res: MpccInterfaces.SetPathResponse) {
+        set_path_client.callService(req, function (res: MpccInterfaces.SetPathResponse) {
             console.log("Sent path");
             console.log("Success", res.success);
             console.log(res.error_msg);
@@ -225,13 +264,19 @@ export function sendPath(shapes: (Line | Arc)[]) {
     }
 }
 
-function updateTrajectoryPlan(msg: MpccInterfaces.TrajectoryPlan) {
+export function send_waypoints(shapes: DubinsPath, altitude: number) {
+    let wps = get_dubins_wps(shapes, altitude);
+    set_mission(wps)
+}
+
+function update_trajectory_plan(msg: MpccInterfaces.TrajectoryPlan) {
     trajectory_plan = msg;
 }
 
 const ros = open_ros(
     // "ws://126.158.118:9090",
-    "ws://192.168.67.63:9090",
+    // "ws://192.168.67.63:9090",
+    "ws://localhost:9090",
 
     onRosConnect,
 
@@ -266,14 +311,90 @@ export function converge_path(shapes: DubinsPath, callback: (path: DubinsPath) =
 
 }
 
+// TODO: better handling of return values
+
+export function clear_geofence() {
+    if (!geofence_clear_client) return new Error("Geofence push client not connected");
+    geofence_clear_client.callService({}, (res: MavrosMsgs.WaypointClearResponse) => {
+        console.log(res);
+    })
+}
+
+export function set_geofence(geofence: BMFA_Coords[]) {
+    if (!geofence_push_client || !set_parameter_client) throw new Error("Client not connected (geofence, parameter)");
+    let waypoints = get_geofence_wps(geofence);
+    let req: MavrosMsgs.WaypointPushRequest = {
+        start_index: 0,
+        waypoints: waypoints
+    };
+    geofence_push_client.callService(req, (res: MavrosMsgs.WaypointPushResponse) => {
+        console.log(res.success);
+    })
+    
+    // enable fence (FENCE_ENABLE = 1)
+    let enable_geofence_req: MavrosMsgs.ParamSetV2Request = {
+        force_set: true,
+        param_id: "FENCE_ENABLE",
+        value: {
+            type: RclInterfaces.ParameterTypeConst.PARAMETER_INTEGER,
+            integer_value: 1
+        } as RclInterfaces.ParameterValue
+    }
+    set_parameter_client.callService(enable_geofence_req, (res: MavrosMsgs.ParamSetV2Response) => {
+        console.log(res);
+    })
+}
+
+export function clear_mission() {
+    if (!mission_clear_client) throw new Error("Mission clear client not connected");
+    mission_clear_client.callService({}, (res: MavrosMsgs.WaypointClearResponse) => {
+        console.log(res);
+    });
+}
+
+export function set_mission(waypoints: MavrosMsgs.Waypoint[]) {
+    if (!mission_push_client) throw new Error("Mission push client not connected");
+    let req: MavrosMsgs.WaypointPushRequest = {
+        start_index: 0,
+        waypoints: waypoints
+    }
+    mission_push_client.callService(req, (res: MavrosMsgs.WaypointPushResponse) => {
+        console.log(res);
+    })
+}
+
+let payload_toggle_value = false;
+
+export function drop_payload() {
+    payload_toggle_value = !payload_toggle_value;
+    if (!set_parameter_client) throw new Error("Parameter client not connected");
+    let req: MavrosMsgs.ParamSetV2Request = {
+        force_set: true,
+        param_id: "SERVO8_TRIM",
+        value: {
+            type: RclInterfaces.ParameterTypeConst.PARAMETER_INTEGER,
+            integer_value: payload_toggle_value ? 2000 : 1000,
+        }
+    }
+    set_parameter_client.callService(req, (res: MavrosMsgs.ParamSetV2Response) => {
+        console.log(res);
+    })
+}
+
 let status_listener: ROSLIB.Topic | null = null,
     arm_vehicle: ROSLIB.Service | null = null,
-    set_path_service: ROSLIB.Service | null = null,
-    set_parameter_service: ROSLIB.Service | null = null,
+    set_path_client: ROSLIB.Service | null = null,
+    set_parameter_client: ROSLIB.Service | null = null,
     trajectory_plan_listener: ROSLIB.Topic | null = null,
     trajectory_plan: MpccInterfaces.TrajectoryPlan | null = null;
 
-let path_drag_client: ROSLIB.Service | null = null;
+let path_drag_client: ROSLIB.Service | null = null,
+    geofence_clear_client: ROSLIB.Service | null = null,
+    geofence_push_client: ROSLIB.Service | null = null,
+    mission_clear_client: ROSLIB.Service | null = null,
+    mission_push_client: ROSLIB.Service | null = null,
+    mission_set_current_client: ROSLIB.Service | null = null;
 
 let mav_data: IMavData = {};
 let mav_data_history: IMavData[] = [];
+
