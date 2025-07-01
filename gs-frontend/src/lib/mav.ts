@@ -2,6 +2,7 @@ import ROSLIB from "roslib";
 import {
     MavrosMsgs,
     MpccInterfaces,
+    RclInterfaces,
     SensorMsgs,
     type GeographicMsgs,
     type GeometryMsgs,
@@ -110,7 +111,7 @@ function onRosConnect() {
     // periodically record history
     setInterval(function () {
         mav_data_history.push(structuredClone(mav_data));
-        if (mav_data_history.length > 40960) {
+        if (mav_data_history.length > 4096) {
             mav_data_history.unshift();
         }
     }, 20);
@@ -121,6 +122,13 @@ function onRosConnect() {
         messageType: "mavros_msgs/msg/StatusText"
     });
     statusListener.subscribe(updateStatusText);
+
+    trajectory_plan_listener = new ROSLIB.Topic({
+        ros: ros,
+        name: "gs/trajectory_plan",
+        messageType: "mpcc_interfaces/msg/TrajectoryPlan"
+    });
+    trajectory_plan_listener.subscribe(updateTrajectoryPlan);
 
     armVehicle = new ROSLIB.Service({
         ros: ros,
@@ -134,12 +142,12 @@ function onRosConnect() {
         serviceType: "mpcc_interfaces/srv/SetPath"
     });
 
-    trajectory_plan_listener = new ROSLIB.Topic({
-        ros: ros,
-        name: "gs/trajectory_plan",
-        messageType: "mpcc_interfaces/msg/TrajectoryPlan"
-    });
-    trajectory_plan_listener.subscribe(updateTrajectoryPlan);
+    setParameterService = new ROSLIB.Service({
+        ros: ros, 
+        name: "mavros/param/set",
+        serviceType: "mavros_msgs/srv/ParamSetV2"
+    })
+    
 }
 
 export function enableArm() {
@@ -165,6 +173,25 @@ export function cancelArm() {
             console.log("Success", result.success);
             console.log("Response", result.message);
         });
+    }
+}
+
+export function terminate() {
+    if (setParameterService) {
+        const req: MavrosMsgs.ParamSetV2Request = {
+            force_set: true,
+            param_id: "AFS_TERMINATE",
+            value: {
+                type: RclInterfaces.ParameterTypeConst.PARAMETER_INTEGER,
+                integer_value: 1
+            }
+        }
+        setParameterService.callService(req, (res: MavrosMsgs.ParamSetV2Response) => {
+            console.log("Flight terminated", res.success);
+        })
+
+    } else {
+        Error("Parameter set service not found")
     }
 }
 
@@ -196,7 +223,8 @@ function updateTrajectoryPlan(msg: MpccInterfaces.TrajectoryPlan) {
 }
 
 const ros = open_ros(
-    "ws://126.158.118:9090",
+    // "ws://126.158.118:9090",
+    "ws://localhost:9090",
 
     onRosConnect,
 
@@ -222,8 +250,10 @@ export function get_trajectory_plan(): MpccInterfaces.TrajectoryPlan | null {
 let statusListener: ROSLIB.Topic | null = null,
     armVehicle: ROSLIB.Service | null = null,
     setPathService: ROSLIB.Service | null = null,
+    setParameterService: ROSLIB.Service | null = null,
     trajectory_plan_listener: ROSLIB.Topic | null = null,
     trajectory_plan: MpccInterfaces.TrajectoryPlan | null = null;
 
 let mav_data: IMavData = {};
 let mav_data_history: IMavData[] = [];
+

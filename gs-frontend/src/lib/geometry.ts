@@ -5,7 +5,7 @@ import { Cartesian3, Cartographic, Viewer, Cartesian2 } from "cesium";
 // export const ORIGIN = Cartographic.fromDegrees(-0.7097051097617251, 52.830542659049435, 146 + 60); // approx airfield elevation ????
 
 // Holyrood Park
-export const ORIGIN = Cartographic.fromDegrees(-3.166666, 55.9525, 40);
+export const ORIGIN = Cartographic.fromDegrees(-0.707980, 52.780515, 137); // BMFA runway center
 export const HANDLE_POINT_RADIUS = 4;
 const TRI_SIZE = 10;
 

@@ -45,14 +45,35 @@
         Viewer,
         Cartesian2,
         Ellipsoid,
+        UrlTemplateImageryProvider,
+        CzmlDataSource
     } from "cesium";
-    import { Arc, HANDLE_POINT_RADIUS, Line, Local3, ORIGIN, quaternion_to_RPY, make_line, make_arc } from "$lib/geometry";
+    import {
+        Arc,
+        HANDLE_POINT_RADIUS,
+        Line,
+        Local3,
+        ORIGIN,
+        quaternion_to_RPY,
+        make_line,
+        make_arc
+    } from "$lib/geometry";
     import { draw_horizon } from "$lib/pfd";
     import "cesium/Build/Cesium/Widgets/widgets.css";
     import { onMount } from "svelte";
     import SensorView from "$lib/SensorView.svelte";
-    import { cancelArm, enableArm, get_current_mav_data, get_mav_data_history, get_trajectory_plan, sendPath, type IMavData } from "$lib/mav";
+    import {
+        cancelArm,
+        enableArm,
+        get_current_mav_data,
+        get_mav_data_history,
+        get_trajectory_plan,
+        sendPath,
+        terminate,
+        type IMavData
+    } from "$lib/mav";
     import { MpccInterfaces } from "$lib/rostypes/ros_msgs";
+    import { Coord_Type, get_cartesians, to_czml, type BMFA_Coords } from "$lib/waypoints";
 
     Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN;
 
@@ -94,24 +115,19 @@
           }
         | undefined = undefined;
 
-
     function draw_mav_history(history: IMavData[], current: IMavData, plan: MpccInterfaces.TrajectoryPlan | null) {
         if (!viewer || !ctx) return;
-        const degrees_heights_array = 
-            history
-                .map((element) => {
-                    return element.gpsFix !== undefined && element.gpsFix.latitude !== 0 && element.gpsFix.longitude !== 0
-                        ? [element.gpsFix?.longitude, element.gpsFix?.latitude, element.gpsFix?.altitude]
-                        : [];
-                })
-                .flat();
+        const degrees_heights_array = history
+            .map((element) => {
+                return element.gpsFix !== undefined && element.gpsFix.latitude !== 0 && element.gpsFix.longitude !== 0
+                    ? [element.gpsFix?.longitude, element.gpsFix?.latitude, element.gpsFix?.altitude]
+                    : [];
+            })
+            .flat();
 
         if (degrees_heights_array.length < 2 * 3) return;
 
-        const cartesians = Cartesian3.fromDegreesArrayHeights(
-            degrees_heights_array,
-            Ellipsoid.WGS84
-        );
+        const cartesians = Cartesian3.fromDegreesArrayHeights(degrees_heights_array, Ellipsoid.WGS84);
 
         let a = viewer.scene.cartesianToCanvasCoordinates(cartesians[0], scratchc3_a);
 
@@ -209,6 +225,60 @@
     }
     let roll_command = 0;
     let curr_heading = 0;
+    let coordinates: BMFA_Coords[] | null = null;
+    let geofence: BMFA_Coords[] | null = null;
+    let waypoints: BMFA_Coords[] | null = null;
+    let payload: BMFA_Coords | null = null;
+
+    function draw_coordinates(coordinates: BMFA_Coords[]) {
+        if (!viewer || !ctx || !coordinates || !geofence) return;
+        const cartesians = get_cartesians(coordinates);
+        ctx.save();
+        for (let i = 0; i < coordinates.length; i += 1) {
+            let a = viewer.scene.cartesianToCanvasCoordinates(cartesians[i], scratchc3_a);
+            let mouse_inside = false;
+            if (
+                Math.pow(mouseX - a.x, 2) + Math.pow(mouseY - a.y, 2) <
+                HANDLE_POINT_RADIUS * HANDLE_POINT_RADIUS + 150
+            ) {
+                mouse_inside = true;
+            }
+            let lightness = mouse_inside ? "50%" : "90%";
+            let hue: string = "0deg";
+            switch (coordinates[i].type) {
+                case Coord_Type.RUNWAY:
+                    hue = "150deg";
+                    break;
+                case Coord_Type.GEOFENCE:
+                    hue = "30deg";
+                    break;
+                case Coord_Type.WAYPOINT:
+                    hue = "230deg";
+                    break;
+                case Coord_Type.PAYLOAD:
+                    hue = "300deg";
+                    break;
+            }
+            ctx.fillStyle = `lch(${lightness} 100% ${hue})`;
+            ctx.beginPath();
+            ctx.arc(a.x, a.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+
+        const geofence_cart = get_cartesians(geofence);
+
+        ctx.strokeStyle = "lch(50% 80% 30deg)";
+        ctx.beginPath();
+        let path_end = viewer.scene.cartesianToCanvasCoordinates(geofence_cart.at(-1) as Cartesian3, scratchc3_a);
+        ctx.moveTo(path_end.x, path_end.y);
+        for (let i = 0; i < geofence_cart.length; i += 1) {
+            let a = viewer.scene.cartesianToCanvasCoordinates(geofence_cart[i], scratchc3_a);
+            ctx.lineTo(a.x, a.y);
+        }
+
+        ctx.stroke();
+        ctx.restore();
+    }
 
     onMount(() => {
         // Initialize the Cesium Viewer in the HTML element with the `cesiumContainer` ID.
@@ -224,6 +294,42 @@
         });
         ctx = canvas.getContext("2d");
         pfd_ctx = pfd.getContext("2d");
+
+        fetch("/coordinates.json").then((res) => {
+            if (res.ok) {
+                res.json().then((res: { name: string; latitude: number; longitude: number }[]) => {
+                    coordinates = res.map((item) => {
+                        let coordinate: Partial<BMFA_Coords> = item;
+                        if (item.name.startsWith("R")) {
+                            coordinate.type = Coord_Type.RUNWAY;
+                        } else if (item.name.startsWith("G")) {
+                            coordinate.type = Coord_Type.GEOFENCE;
+                        } else if (item.name.startsWith("W")) {
+                            coordinate.type = Coord_Type.WAYPOINT;
+                        } else if (item.name.startsWith("P")) {
+                            coordinate.type = Coord_Type.PAYLOAD;
+                        } else {
+                            console.error("Could not parse coordinate", item);
+                        }
+                        return coordinate;
+                    }) as BMFA_Coords[];
+                    geofence = coordinates.filter((coord) => coord.type == Coord_Type.GEOFENCE);
+                    waypoints = coordinates.filter((coord) => coord.type == Coord_Type.WAYPOINT);
+                    payload = coordinates.find((coord) => coord.type == Coord_Type.PAYLOAD) ?? null;
+                    const waypoint_czml = waypoints?.map((wp) => to_czml(wp));
+                    waypoint_czml?.unshift({
+                        id: "document",
+                        name: "Waypoints",
+                        version: "1.0"
+                    });
+                    console.log(waypoint_czml);
+
+                    viewer?.dataSources.add(CzmlDataSource.load(waypoint_czml));
+                });
+            } else {
+                console.log("Asset not found: coordinates.json");
+            }
+        });
 
         // Fly the camera to the origin longitude, latitude, and height.
         viewer.camera.flyTo({
@@ -258,17 +364,18 @@
                 const mav_history = get_mav_data_history();
                 const plan = get_trajectory_plan();
                 draw_mav_history(mav_history, mav_data, plan);
+                draw_coordinates(coordinates);
             }
             if (pfd_ctx) {
                 let pitch = 0;
                 let roll = 0;
                 let alt = 0;
                 let connected = false;
-                if (mav_data.localPose && mav_data.relAltitude) {
-                    const rpy = quaternion_to_RPY(mav_data.localPose?.pose.orientation);
+                if (mav_data.imuData /*&& mav_data.relAltitude*/) {
+                    const rpy = quaternion_to_RPY(mav_data.imuData?.orientation);
                     pitch = -rpy.pitch;
                     roll = -rpy.roll;
-                    alt = mav_data.relAltitude?.data;
+                    // alt = mav_data.relAltitude?.data;
                     connected = true;
                 }
                 draw_horizon(pfd, pfd_ctx, {
@@ -281,7 +388,7 @@
                     ws: 314.3,
                     heading: (curr_heading * 180) / Math.PI,
                     connected,
-                    armed: false,
+                    armed: false
                 });
             }
 
@@ -291,7 +398,8 @@
             sensors[2][1].push(mav_data.batteryData?.voltage || 0.0 * (mav_data.batteryData?.current || 0.0));
             sensors[7][1].push(
                 Math.sqrt(
-                    (mav_data.wind?.twist.twist.linear.x || 0.0) ** 2 + (mav_data.wind?.twist.twist.linear.y || 0.0) ** 2
+                    (mav_data.wind?.twist.twist.linear.x || 0.0) ** 2 +
+                        (mav_data.wind?.twist.twist.linear.y || 0.0) ** 2
                 )
             );
             sensors[8][1].push(mav_data.gpsFix?.altitude || 0.0);
@@ -584,16 +692,18 @@
 
 <div id="data">
     <canvas id="pfd" bind:this={pfd}></canvas>
-    <SensorView {sensors} bind:draw_graphs={draw_graphs} />
+    <SensorView {sensors} bind:draw_graphs />
 </div>
 <canvas id="canvas" bind:this={canvas}></canvas>
 <div id="cesiumContainer"></div>
 <div class="fixed bottom-4 right-4 z-50 h-64 w-80 overflow-hidden">
     <div class="rounded bg-black/70" style="height: 100%">
-        <div id="arm-button" class="flex-column flex border-b border-white/20">
+        <div id="arm-button" class="grid-columns-3 border-b border-white/20">
             <button class="btn btn-gray" on:click={enableArm}>Arm</button>
             <button class="btn btn-gray" on:click={cancelArm}>Cancel&nbsp;Arm</button>
             <button class="btn btn-gray" on:click={() => sendPath(shapes)}>Send&nbsp;path</button>
+            <button class="btn btn-gray" on:click={setGeoFence}>Send&nbsp;Geofence</button>
+            <button class="btn btn-gray" on:click={terminate}>FTS</button>
         </div>
         <div class="border-b border-white/20 p-3">
             <h3 class="text-sm font-medium text-white">Messages</h3>
