@@ -1,8 +1,6 @@
-import jax.numpy as jnp
-from jax import vmap
+import numpy as np
 from .dubins_segment import Segment, SegmentType
 from .dubins_types import Vec2
-
 
 class DubinsPath:
     def __init__(self, segments: list[Segment]):
@@ -26,7 +24,7 @@ class DubinsPath:
 
     def length(self) -> float:
         "Total length of the path"
-        return jnp.sum(jnp.array(self.lengths()))
+        return np.sum(np.array(self.lengths()))
 
     def eval(self, arclength: float) -> Vec2:
         "Get the path position at a given arclength"
@@ -52,18 +50,18 @@ class DubinsPath:
         return self._segments[-1].end()
 
     def get_params(self):
-        return jnp.concat([segment.get_params() for segment in self._segments])
+        return np.concat([segment.get_params() for segment in self._segments])
 
-    def set_params(self, params: jnp.ndarray):
+    def set_params(self, params: np.ndarray):
         assert params.shape == self.get_params().shape
         index = 0
         for segment in self._segments:
             segment.set_params(params[index : index + segment.n_params])
             index += segment.n_params
 
-    def get_constraint_residuals(self, params: jnp.ndarray) -> jnp.ndarray:
+    def get_constraint_residuals(self, params: np.ndarray) -> np.ndarray:
         n_points = len(self._segments) - 1
-        output = jnp.empty((n_points * 2))
+        output = np.empty((n_points * 2))
 
         index = 0
         for i in range(n_points):
@@ -83,14 +81,14 @@ class DubinsPath:
                 params_i
             ) - segment_ii.heading_start_with(params_ii)
             output = output.at[n_points + i].set(
-                jnp.pow(jnp.sin(heading_diff / 2.0), 2)
+                np.pow(np.sin(heading_diff / 2.0), 2)
             )
             # move index forward
             index = index_i
         return output
 
     def n_params(self) -> int:
-        return jnp.sum(jnp.array([segment.n_params for segment in self._segments]))
+        return np.sum(np.array([segment.n_params for segment in self._segments]))
 
     def n_constraints(self) -> int:
         "Get the number of constraints (two for each knot point)"
@@ -101,8 +99,12 @@ class DubinsPath:
 
     def get_segment_index_by_arclength(self, arclength: float):
         "Get the index of the segment containing this arclength"
-        tot_lengths = jnp.cumsum(jnp.array(self.lengths()))
-        return jnp.nonzero(tot_lengths > arclength)[0][0]
+        tot_lengths = np.cumsum(np.array(self.lengths()))
+        nonzeros = np.nonzero(tot_lengths > arclength)
+        if len(nonzeros) > 0:
+            return nonzeros[0][0]
+        else:
+            return 0
 
     def get_closest_arclength(self, pos_prev: Vec2, pos_curr: Vec2, estimated_arclength: float):
         "Find the arclength to a given point closest to the estimated arclength"
@@ -114,13 +116,13 @@ class DubinsPath:
         new_estimated_arclength = estimated_arclength + ds
         arclength_prev = 0.0
         closest_arclength = 0.0
-        closest_delta = jnp.inf
+        closest_delta = np.inf
         for segment in self._segments:
             # please lord let it not be O(N^2)
             possibles = segment.possible_arclengths(pos_curr)
             for possible in possibles:
                 arclength = arclength_prev + possible
-                delta = jnp.abs(new_estimated_arclength - arclength)
+                delta = np.abs(new_estimated_arclength - arclength)
                 # allow the estimated arclength to jump segments
                 if delta < closest_delta or delta < 3:
                     closest_arclength = arclength

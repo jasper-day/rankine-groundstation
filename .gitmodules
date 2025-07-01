@@ -4,3 +4,9 @@
 [submodule "mpcc/external/eigen"]
 	path = mpcc/external/eigen
 	url = https://gitlab.com/libeigen/eigen/
+[submodule "mpcc/external/autodiff"]
+	path = mpcc/external/autodiff
+	url = https://github.com/autodiff/autodiff.git
+[submodule "mpcc/external/Catch2"]
+	path = mpcc/external/Catch2
+	url = https://github.com/catchorg/Catch2.git

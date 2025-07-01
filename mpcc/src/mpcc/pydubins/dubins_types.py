@@ -1,4 +1,4 @@
-import jax.numpy as jnp
+import numpy as np
 from typing import TypeAlias
 
-Vec2: TypeAlias = jnp.ndarray
+Vec2: TypeAlias = np.ndarray

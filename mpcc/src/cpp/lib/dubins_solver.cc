@@ -8,6 +8,128 @@
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <autodiff/reverse/var/var.hpp>
+#include <autodiff/reverse/var/eigen.hpp>
+
+autodiff::Vector2var ls_start_with(const autodiff::Vector4var& params) {
+  return params(Eigen::seq(0, 2));
+}
+
+autodiff::Vector2var ls_end_with(const autodiff::Vector4var& params) {
+  return params(Eigen::seq(2, 4));
+}
+
+autodiff::var ls_heading_start_with(const autodiff::Vector4var& params) {
+  const auto direction = ls_end_with(params) - ls_start_with(params);
+  using std::atan2;
+  return atan2(direction(1), direction(0));
+}
+
+autodiff::var ls_heading_end_with(const autodiff::Vector4var& params) {
+  return ls_heading_start_with(params);
+}
+
+autodiff::Vector2var cs_eval_with(const autodiff::VectorXvar& params, const autodiff::var& arclength) {
+  using namespace autodiff;
+  const auto center = params(Eigen::seq(0, 2));
+  const auto radius = params(2);
+  const auto heading = params(3);
+  const auto c_arclength = params(4);
+  const auto dir = sgn(c_arclength);
+  using std::abs;
+  const auto arclength_clipped = max(min(arclength, abs(c_arclength)), 0.0);
+  const auto angle = heading + arclength_clipped / radius * dir;
+  Vector2var angle_direction;
+  using std::cos;
+  using std::sin;
+  angle_direction << cos(angle), sin(angle);
+  return center + radius * angle_direction;
+}
+
+autodiff::Vector2var cs_start_with(const autodiff::VectorXvar& params) {
+  return cs_eval_with(params, 0.0);
+}
+
+autodiff::Vector2var cs_end_with(const autodiff::VectorXvar& params) {
+  const auto c_arclength = params(4);
+  using std::abs;
+  return cs_eval_with(params, abs(c_arclength));
+}
+
+autodiff::var cs_heading_start_with(const autodiff::VectorXvar& params) {
+  using namespace autodiff;
+  const auto heading = params(3);
+  const auto dir = sgn(params(4));
+  return heading + M_PI / 2 * dir;
+}
+
+autodiff::var cs_heading_end_with(const autodiff::VectorXvar& params) {
+  const auto radius = params(2);
+  const auto arclength = params(4);
+  return cs_heading_start_with(params) + arclength / radius;
+}
+
+enum segment_type {LINE, CIRCLE};
+
+int n_params(segment_type type) {
+  if (type == segment_type::LINE) {
+    return 4;
+  } else if (type == segment_type::CIRCLE) {
+    return 5;
+  }
+}
+
+autodiff::VectorXvar path_get_constraint_residuals(const autodiff::VectorXvar& params, const std::vector<segment_type> & types) {
+  using namespace autodiff;
+  const auto n_points = types.size() - 1;
+  VectorXvar output(n_points * 2);
+
+  Eigen::Index index = 0;
+  // some handy loop variables
+  Eigen::Index index_i;
+  Eigen::Index index_ii;
+  segment_type segment_i;
+  segment_type segment_ii;
+  Vector2var segment_i_end;
+  Vector2var segment_ii_start;
+  var segment_i_heading_end;
+  var segment_ii_heading_start;
+
+  for (int i = 0; i != n_points; ++i) {
+    index_i = index + n_params(types.at(i));
+    const auto params_i = params(Eigen::seq(index, index_i));
+    index_ii = index_i + n_params(types.at(i + 1));
+    const auto params_ii = params(Eigen::seq(index_i, index_ii));
+    segment_i = types.at(i);
+    segment_ii = types.at(i + 1);
+
+    if (segment_i == segment_type::LINE) {
+      segment_i_end = ls_end_with(params_i);
+      segment_i_heading_end = ls_heading_end_with(params_i);
+    } else {
+      segment_i_end = cs_end_with(params_i);
+      segment_i_heading_end = cs_heading_end_with(params_i);
+    }
+    if (segment_ii == segment_type::LINE) {
+      segment_ii_start = ls_start_with(params_ii);
+      segment_ii_heading_start = ls_heading_start_with(params_ii);
+    } else {
+      segment_ii_start = cs_start_with(params_ii);
+      segment_ii_heading_start = cs_heading_start_with(params_ii);
+    }
+
+    const auto distance = segment_ii_start - segment_i_end;
+    output(i) = distance.dot(distance);
+    
+    using std::pow;
+    using std::sin;
+    const auto heading_diff = segment_ii_heading_start - segment_i_heading_end;
+    output(i + n_points) = pow(sin(heading_diff / 2.0), 2);
+
+    index = index_i;
+  }
+  return output;
+}
 
 struct SolverResult {
   Eigen::VectorXd const params;

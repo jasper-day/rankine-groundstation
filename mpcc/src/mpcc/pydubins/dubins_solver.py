@@ -1,6 +1,3 @@
-from jax import jacfwd
-import jax.numpy as jnp
-import jax
 from .dubins_path import DubinsPath
 import numpy as np
 from .cpp_solve import SolverConfig, SolverResult, solve
@@ -31,10 +28,10 @@ class DubinsSolver:
 
         p_curr = np.array(jax.device_get(path.get_params()))
         jac_fn = lambda p: jax.device_get(  # noqa: E731
-            jax.jit(jacfwd(path.get_constraint_residuals))(jnp.array(p))
+            jax.jit(jacfwd(path.get_constraint_residuals))(np.array(p))
         )
         resid_fn = lambda p: jax.device_get(  # noqa: E731
-            jax.jit(path.get_constraint_residuals)(jnp.array(p))
+            jax.jit(path.get_constraint_residuals)(np.array(p))
         )
 
         config = SolverConfig(

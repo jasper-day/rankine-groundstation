@@ -12,9 +12,10 @@ if(DEFINED ENV{VIRTUAL_ENV})
   message(STATUS "Using Python from virtual environment: $ENV{VIRTUAL_ENV}")
 endif()
 
-find_package(Python3 COMPONENTS Interpreter Development)
-
 find_package(Eigen3 REQUIRED)
+
+set(AUTODIFF_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory(external/autodiff)
 
 if(DEFINED ENV{VIRTUAL_ENV})
   list(APPEND CMAKE_PREFIX_PATH "$ENV{VIRTUAL_ENV}")
@@ -33,7 +34,7 @@ set(DUBINS_SOURCES
 find_package(pybind11 CONFIG REQUIRED)
 
 pybind11_add_module(cpp_solve MODULE ${DUBINS_SOURCES})
-target_link_libraries(cpp_solve PRIVATE Eigen3::Eigen)
+target_link_libraries(cpp_solve PRIVATE Eigen3::Eigen autodiff::autodiff)
 target_include_directories(cpp_solve PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
