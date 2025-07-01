@@ -42,6 +42,7 @@
         );
     }
     export function draw_graphs() {
+        sensors = sensors;
         for (let i = 0; i < sensors.length; i++) {
             const canvas = graphs[i];
             if (!canvas) continue;
