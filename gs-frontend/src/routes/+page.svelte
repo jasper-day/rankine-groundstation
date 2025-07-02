@@ -43,7 +43,10 @@
         make_line,
         make_arc,
         serialise_path,
-        deserialise_path
+        deserialise_path,
+
+        path_from_points
+
     } from "$lib/geometry";
     import { draw_horizon } from "$lib/pfd";
     import "cesium/Build/Cesium/Widgets/widgets.css";
@@ -65,6 +68,7 @@
     import { Coord_Type, to_czml, type BMFA_Coords } from "$lib/waypoints";
     import { draw_coordinates, draw_mav_history, draw_waypoint_distances } from "$lib/graphics";
     import { draw_path, get_path, get_path_points, keypress, mousedown, mousemove, mouseup, mouseX, mouseY, set_path, set_path_points } from "$lib/edit_path";
+    import { download_string, export_waypoints, get_dubins_wps } from "$lib/mission";
 
     Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN;
 
@@ -96,7 +100,6 @@
     const scratchc3_b: Cartesian3 = new Cartesian3();
 
     onMount(() => {
-        let draw_cb: (() => void) | null = null;
         
         // Initialize the Cesium Viewer in the HTML element with the `cesiumContainer` ID.
         viewer = new Viewer("cesiumContainer", {
@@ -215,7 +218,6 @@
             );
             sensors[8][1].push(mav_data.gpsFix?.altitude || 0.0);
             draw_graphs();
-            draw_cb && draw_cb();
         });
 
         // Chrome doesn't support mouse events
@@ -245,8 +247,6 @@
         window.addEventListener("mousemove", on_mousemove);
         window.addEventListener("keypress", on_keypress);
 
-        
-
         let path_points = localStorage.getItem("path_points");
         if (path_points) {
             set_path_points(JSON.parse(path_points))
@@ -262,6 +262,14 @@
             datas.push(prev + x * 0.05 * (Math.random() - 0.5));
         }
         return datas;
+    }
+
+    function export_waypoints_gs() {
+        let path_points = get_path_points();
+        let path = path_from_points(path_points);
+        let waypoints = get_dubins_wps(path, 40);
+        let ex = export_waypoints(waypoints);
+        download_string(ex, "text/csv", ".waypoints");
     }
 
     let sensors: [string, number[], string][] = [
@@ -305,6 +313,7 @@
             >
             <button class="btn btn-gray" on:click={terminate}>FTS</button>
             <button class="btn btn-gray" on:click={drop_payload}>Drop payload</button>
+            <button class="btn btn-gray" on:click={export_waypoints_gs}>Export</button>
         </div>
         <div class="border-b border-white/20 p-3"></div>
         <div class="h-full space-y-2 overflow-y-auto p-3" id="status-message-container"></div>

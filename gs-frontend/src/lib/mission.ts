@@ -82,3 +82,22 @@ export function get_geofence_wps(geofence: BMFA_Coords[]) {
     });
 
 }
+
+export function export_waypoints(waypoints: MavrosMsgs.Waypoint[]) {
+    let text = waypoints.map((waypoint, i) => `${i}\t${waypoint.is_current ?? 0}\t${waypoint.frame}\t${waypoint.command}\t${waypoint.param1}\t${waypoint.param2}\t${waypoint.param3}\t${waypoint.param4}\t${waypoint.x_lat}\t${waypoint.y_long}\t${waypoint.z_alt}\t${1}`).join('\n')
+    return "QGC WPL 110\n" + text;
+}
+
+export function download_string(text: string, file_type: string, file_name: string) {
+  var blob = new Blob([text], { type: file_type });
+
+  var a = document.createElement('a');
+  a.download = file_name;
+  a.href = URL.createObjectURL(blob);
+  a.dataset.downloadurl = [file_type, a.download, a.href].join(':');
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function() { URL.revokeObjectURL(a.href); }, 1500);
+}

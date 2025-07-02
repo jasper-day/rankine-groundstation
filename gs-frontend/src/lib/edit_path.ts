@@ -1,5 +1,5 @@
 import { Cartesian3, type Viewer, Math as CesiumMath, Ellipsoid, Cartesian2 } from "cesium";
-import { Arc, HANDLE_POINT_RADIUS, Line, Local2, make_arc, make_line, ORIGIN, path_from_points, path_make_continuous, type DubinsPath } from "./geometry";
+import { Arc, HANDLE_POINT_RADIUS, Line, Local2, make_arc, make_line, ORIGIN, path_from_points, type DubinsPath } from "./geometry";
 import type { BMFA_Coords } from "./waypoints";
 import { draw_distance_dashed, draw_point } from "./graphics";
 
@@ -108,25 +108,39 @@ export function mousemove(viewer: Viewer, ctx: CanvasRenderingContext2D, event: 
     const cartesian = viewer.camera.pickEllipsoid(new Cartesian3(mouseX, mouseY), Ellipsoid.WGS84);
     if (cartesian == undefined) return;
     const mouse_local = Local2.fromCartesian(cartesian);
+
     if (drag_point != null) {
+
         // we are dragging
         // need to constrain to available drag points
         const p_type = get_point_type(drag_point);
         let next_point = get_next_point(mouse_local, p_type, drag_point);
         if (next_point) {
-            const old_point = path_points[drag_point];
+            const old_points = structuredClone(path_points);
+            
+            let failed = false;
+
+            const old_point = path_points[drag_point]
             path_points[drag_point] = next_point;
+
             if (drag_point < path_points.length - 1 && p_type == PointType.LINEEND) {
                 path_points[drag_point + 1] = path_points[drag_point + 1].add(next_point.sub(old_point));
             }
+
             for (let i = drag_point; i != path_points.length; ++i) {
                 const p_type = get_point_type(i);
                 if (p_type == PointType.CENTER) {
                     const new_point = get_next_point(path_points[i], p_type, i);
                     if (new_point) {
                         path_points[i] = new_point;
+                    } else {
+                        failed = true
                     }
                 }
+            }
+
+            if (failed) {
+                path_points = old_points;
             }
 
         }

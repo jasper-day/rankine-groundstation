@@ -533,14 +533,17 @@ export function path_from_points(points: Local2[]) {
     let path: DubinsPath = [];
     if (points.length < 2) return path;
     path.push(new Line(points[0], points[1]));
+    if (points.length < 4) return path;
     for (let i = 3; i < points.length; i += 2)
         {
         // a = line end, b = prev center, c = prev. line end
         let a = points[i], b = points[i - 1], c = points[i-2];
+        
         let last_line = path.at(-1) as Line ?? null;
         if (!last_line) break; // guaranteed not to happen
         // Add circular and line segment
         // https://en.wikipedia.org/wiki/Tangent_lines_to_circles#With_analytic_geometry
+        console.log(typeof(a));
         let ab = a.sub(b), cb = c.sub(b);
         let r = cb.mag();
         let d0_squared = ab.mag2();
@@ -572,61 +575,6 @@ export function path_from_points(points: Local2[]) {
         }
     
     return path;
-}
-
-export function path_make_continuous(path: DubinsPath) {
-    if (path.length <= 1) return;
-    // Assert that path alternates between circles and lines
-    enum SegType {ARC, LINE};
-    let seg_type: SegType;
-    if (path[0] instanceof Arc) {
-        seg_type = SegType.ARC;
-    } else {
-        seg_type = SegType.LINE;
-    }
-    for (const s of path.slice(1,-1)) {
-        switch (seg_type) {
-            case SegType.ARC:
-                seg_type = SegType.LINE;
-                if (!(s instanceof Line)) throw new Error("Path segments must alternate");
-                break;
-            case SegType.LINE:
-                seg_type = SegType.ARC;
-                if (!(s instanceof Arc)) throw new Error("Path segments must alternate");
-                break;
-        }
-    }
-    // each pair of line segments must have a C0 circle connecting them. 
-    // The endpoint line segment can have an intermediate C0 arc.
-    let line_index = path.findIndex((s) => (s instanceof Line));
-    if (line_index == -1) throw new Error("Path does not contain any line segments");
-    while (line_index + 2 < path.length) {
-        // We are in between two line segments
-        let l1 = path[line_index] as Line;
-        let c = path[line_index + 1] as Arc;
-        let l2 = path[line_index + 2] as Line;
-        let d1 = l1.end.sub(l1.start);
-        let d2 = l2.end.sub(l2.start);
-        let p1 = array([d1.y, -d1.x]);
-        let p2 = new Local2(d2.y, -d2.x);
-        let a = l1.end;
-        let b = l2.start;
-        // intersection of p1, p2 is the center of this arc
-        // we'll just ignore the singularity... hope it's not an issue
-        // invert a little matrix!
-        // a + alpha p1 + beta p2 - b = 0
-        let mat = array([[p1.x, p1.y], [p2.x, p2.y]]);
-        let ab = b.sub(a);
-        let matres = mat.solve(array([ab.x, ab.y]));
-        let det = p1.x * p2.y - p1.y * p2.x;
-        let alpha = res.x, beta = res.y;
-        let center = a.add(p1.mul(alpha));
-        let center2 = b.add(p2.mul(beta));
-        if (center.sub(center2).mag2() > 1e-4) throw new Error("Centers don't match somehow");
-        path[line_index + 1] = Arc.from_centre_and_points(center, a, b, c.dir());
-        line_index += 2;
-    }
-    
 }
 
 export function path_length(path: DubinsPath) {
