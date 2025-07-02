@@ -249,7 +249,7 @@
 
         let path_points = localStorage.getItem("path_points");
         if (path_points) {
-            set_path_points(JSON.parse(path_points))
+            set_path_points(JSON.parse(path_points).map((l: Local2) => new Local2(l.x, l.y)));
         }
 
         setInterval(() => localStorage.setItem("path_points", JSON.stringify(get_path_points())), 500);
