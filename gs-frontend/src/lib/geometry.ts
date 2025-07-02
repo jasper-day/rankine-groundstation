@@ -1,5 +1,7 @@
 import { EcefToEnu, EnuToEcef } from "$lib/projection";
-import { Cartesian3, Cartographic, Viewer, Cartesian2 } from "cesium";
+import { Cartesian3, Cartographic, Viewer, Cartesian2, Math as CesiumMath } from "cesium";
+
+
 
 // Some point at buckminster gliding club
 // export const ORIGIN = Cartographic.fromDegrees(-0.7097051097617251, 52.830542659049435, 146 + 60); // approx airfield elevation ????
@@ -101,6 +103,10 @@ export class Local2 {
         this.x *= inv_mag;
         this.y *= inv_mag;
     }
+
+    cross(p: Local2): number {
+        return this.x * p.y - this.y * p.x;
+    }
 }
 
 export class Line {
@@ -123,17 +129,14 @@ export class Line {
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
         ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(a.x, a.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
-        ctx.arc(b.x, b.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
-        ctx.fill();
 
-        let dir = new Cartesian2(b.x - a.x, b.y - a.y);
-        if (Cartesian2.magnitudeSquared(dir) < 0.01) {
+        let dir = new Local2(b.x - a.x, b.y - a.y);
+        if (dir.mag2() < 1e-5) {
             return;
         }
 
-        Cartesian2.normalize(dir, dir);
+        dir.normalise();
+        
         const norm = new Cartesian2(-dir.y, dir.x);
         const midpoint_x = (a.x + b.x) / 2 - (TRI_SIZE / 2) * dir.x;
         const midpoint_y = (a.y + b.y) / 2 - (TRI_SIZE / 2) * dir.y;
@@ -485,7 +488,7 @@ export class Arc {
         ctx.fillStyle = "#ffd040";
 
         this.draw_arc(ctx, viewer);
-        this.draw_handle_points(ctx, viewer);
+        // this.draw_handle_points(ctx, viewer);
         this.draw_direction_arrow(ctx, viewer);
         // this.draw_allowed_region(ctx, viewer);
     }
@@ -524,6 +527,106 @@ export function path_eval(path: DubinsPath, arclength: number) {
         return path.at(-1)?.eval(path.at(-1)?.length() as number) as Local2;
     }
     return path[i].eval(arclength);
+}
+
+export function path_from_points(points: Local2[]) {
+    let path: DubinsPath = [];
+    if (points.length < 2) return path;
+    path.push(new Line(points[0], points[1]));
+    for (let i = 3; i < points.length; i += 2)
+        {
+        // a = line end, b = prev center, c = prev. line end
+        let a = points[i], b = points[i - 1], c = points[i-2];
+        let last_line = path.at(-1) as Line ?? null;
+        if (!last_line) break; // guaranteed not to happen
+        // Add circular and line segment
+        // https://en.wikipedia.org/wiki/Tangent_lines_to_circles#With_analytic_geometry
+        let ab = a.sub(b), cb = c.sub(b);
+        let r = cb.mag();
+        let d0_squared = ab.mag2();
+        let r_squared = r*r;
+
+        if (d0_squared < r_squared) throw new Error("No tangents exist");
+        
+        let e1 = new Local2(ab.x, ab.y);
+        let e2 = new Local2(-ab.y, ab.x);
+        
+        let p1 = e1.mul(r_squared / d0_squared),
+            p2 = e2.mul(r / d0_squared * Math.sqrt(d0_squared - r_squared)),
+            endpoint1 = b.add(p1.add(p2)),
+            endpoint2 = b.add(p1.sub(p2));
+        
+        // choose which endpoint based on the direction of the circle
+        // endpoint1 is for going clockwise
+        // endpoint2 is for going counterclockwise
+        const tan = last_line.end.sub(last_line.start);
+        const dir = tan.cross(b.sub(last_line.start)) > 0 ? -1 : 1;
+        const endpoint = dir == 1 ? endpoint1 : endpoint2;
+        
+        const line = new Line(endpoint, a);
+        const arc = Arc.from_centre_and_points(b, c, endpoint, dir);
+
+        path.push(arc);
+        path.push(line);
+
+        }
+    
+    return path;
+}
+
+export function path_make_continuous(path: DubinsPath) {
+    if (path.length <= 1) return;
+    // Assert that path alternates between circles and lines
+    enum SegType {ARC, LINE};
+    let seg_type: SegType;
+    if (path[0] instanceof Arc) {
+        seg_type = SegType.ARC;
+    } else {
+        seg_type = SegType.LINE;
+    }
+    for (const s of path.slice(1,-1)) {
+        switch (seg_type) {
+            case SegType.ARC:
+                seg_type = SegType.LINE;
+                if (!(s instanceof Line)) throw new Error("Path segments must alternate");
+                break;
+            case SegType.LINE:
+                seg_type = SegType.ARC;
+                if (!(s instanceof Arc)) throw new Error("Path segments must alternate");
+                break;
+        }
+    }
+    // each pair of line segments must have a C0 circle connecting them. 
+    // The endpoint line segment can have an intermediate C0 arc.
+    let line_index = path.findIndex((s) => (s instanceof Line));
+    if (line_index == -1) throw new Error("Path does not contain any line segments");
+    while (line_index + 2 < path.length) {
+        // We are in between two line segments
+        let l1 = path[line_index] as Line;
+        let c = path[line_index + 1] as Arc;
+        let l2 = path[line_index + 2] as Line;
+        let d1 = l1.end.sub(l1.start);
+        let d2 = l2.end.sub(l2.start);
+        let p1 = array([d1.y, -d1.x]);
+        let p2 = new Local2(d2.y, -d2.x);
+        let a = l1.end;
+        let b = l2.start;
+        // intersection of p1, p2 is the center of this arc
+        // we'll just ignore the singularity... hope it's not an issue
+        // invert a little matrix!
+        // a + alpha p1 + beta p2 - b = 0
+        let mat = array([[p1.x, p1.y], [p2.x, p2.y]]);
+        let ab = b.sub(a);
+        let matres = mat.solve(array([ab.x, ab.y]));
+        let det = p1.x * p2.y - p1.y * p2.x;
+        let alpha = res.x, beta = res.y;
+        let center = a.add(p1.mul(alpha));
+        let center2 = b.add(p2.mul(beta));
+        if (center.sub(center2).mag2() > 1e-4) throw new Error("Centers don't match somehow");
+        path[line_index + 1] = Arc.from_centre_and_points(center, a, b, c.dir());
+        line_index += 2;
+    }
+    
 }
 
 export function path_length(path: DubinsPath) {

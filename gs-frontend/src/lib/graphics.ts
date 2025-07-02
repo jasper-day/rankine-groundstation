@@ -4,8 +4,21 @@ import type { MpccInterfaces } from "./rostypes/ros_msgs";
 import { Arc, HANDLE_POINT_RADIUS, Line, Local2, make_line, type DubinsPath } from "./geometry";
 import { Coord_Type, get_cartesians, type BMFA_Coords } from "./waypoints";
 
+
+
 const scratchc3_a = new Cartesian3();
 const scratchc3_b = new Cartesian3();
+
+export function draw_point(point: Local2, ctx: CanvasRenderingContext2D, viewer: Viewer) {
+    const a = viewer.scene.cartesianToCanvasCoordinates(point.toCartesian(), scratchc3_a);
+    ctx.save();
+    ctx.strokeStyle = "yellow";
+    ctx.fillStyle = "#ffd040";
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.restore();
+}
 
 export function draw_mav_history(history: IMavData[], current: IMavData, plan: MpccInterfaces.TrajectoryPlan | null, viewer: Viewer, ctx: CanvasRenderingContext2D, curr_heading: number) {
     const degrees_heights_array = history
@@ -71,58 +84,13 @@ export function draw_mav_history(history: IMavData[], current: IMavData, plan: M
     ctx.restore();
 }
 
-export function draw_intermediate_shape(viewer: Viewer, intermediate_point: Local2, ctx: CanvasRenderingContext2D, mouseX: number, mouseY: number, has_moved_away: boolean, tool: string, shapes: DubinsPath) {
-    // TODO costly operation to undo later on...
-    const mouse_cartesian = viewer.camera.pickEllipsoid(new Cartesian3(mouseX, mouseY), viewer.scene.ellipsoid);
-    if (!mouse_cartesian) return;
-    const mouse_local = Local2.fromCartesian(mouse_cartesian);
-
-    const c = viewer.scene.cartesianToCanvasCoordinates(intermediate_point.toCartesian(), scratchc3_a);
-    if (Cartesian2.distance(c, new Cartesian2(mouseX, mouseY)) < 5) {
-        if (has_moved_away) {
-            tool = tool == "Line" ? "Arc" : "Line";
-            has_moved_away = false;
-            return;
-        }
-    } else {
-        has_moved_away = true;
-    }
-
-    if (tool == "Line") {
-        make_line(intermediate_point, shapes[shapes.length - 1], mouse_local).draw(ctx, viewer);
-    }
-    if (tool == "Arc" && intermediate_point !== undefined) {
-        const p1 = intermediate_point;
-        const p2 = mouse_local;
-        // Points are too close, can't make an arc
-        if (Local2.distance(p1, p2) < 0.01) return;
-
-        const line = shapes[shapes.length - 1];
-        let tangent;
-        if (line instanceof Line) {
-            tangent = line.end.sub(line.start);
-        } else {
-            tangent = line.tangent_at_endpoint();
-        }
-
-        Arc.from_tangent_and_points(tangent, p1, p2).draw(ctx, viewer);
-    }
-}
-
-export function draw_coordinates(coordinates: BMFA_Coords[], ctx: CanvasRenderingContext2D, viewer: Viewer, geofence: BMFA_Coords[], mouseX: number, mouseY: number) {
+export function draw_coordinates(coordinates: BMFA_Coords[], ctx: CanvasRenderingContext2D, viewer: Viewer, geofence: BMFA_Coords[]) {
     if (!viewer || !ctx || !coordinates || !geofence) return;
     const cartesians = get_cartesians(coordinates);
     ctx.save();
     for (let i = 0; i < coordinates.length; i += 1) {
         let a = viewer.scene.cartesianToCanvasCoordinates(cartesians[i], scratchc3_a);
         let mouse_inside = false;
-        if (
-            Math.pow(mouseX - a.x, 2) + Math.pow(mouseY - a.y, 2) <
-            HANDLE_POINT_RADIUS * HANDLE_POINT_RADIUS + 150
-        ) {
-            mouse_inside = true;
-        }
-        let lightness = mouse_inside ? "50%" : "90%";
         let hue: string = "0deg";
         switch (coordinates[i].type) {
             case Coord_Type.RUNWAY:
@@ -138,7 +106,7 @@ export function draw_coordinates(coordinates: BMFA_Coords[], ctx: CanvasRenderin
                 hue = "300deg";
                 break;
         }
-        ctx.fillStyle = `lch(${lightness} 100% ${hue})`;
+        ctx.fillStyle = `lch(70% 100% ${hue})`;
         ctx.beginPath();
         ctx.arc(a.x, a.y, HANDLE_POINT_RADIUS, 0, 2 * Math.PI);
         ctx.fill();
@@ -157,4 +125,59 @@ export function draw_coordinates(coordinates: BMFA_Coords[], ctx: CanvasRenderin
 
     ctx.stroke();
     ctx.restore();
+}
+
+export function draw_waypoint_distances(ctx: CanvasRenderingContext2D, viewer: Viewer, waypoints: BMFA_Coords[], mouseX: number, mouseY: number) {
+    // note: distance in screen space used to draw line on canvas
+    // distance in world space used to display distance in meters
+    const mouse = new Cartesian2(mouseX, mouseY);
+    const ellipsoid = viewer.scene.ellipsoid;
+    const mouse_cart = viewer.camera.pickEllipsoid(mouse, ellipsoid);
+    if (mouse_cart == undefined) return;
+    let closest_point_cart: Cartesian3 | undefined;
+    let closest_dist = 1e9; // TODO infinity
+    const cartesians = Cartesian3.fromDegreesArray(waypoints.flatMap((w) => [w.longitude, w.latitude]));
+    // calculate distance in real-world space
+    for (const c of cartesians) {
+        const dist = Cartesian3.distance(mouse_cart, c);
+        if (dist < closest_dist) {
+            closest_dist = dist;
+            closest_point_cart = c;
+        }
+    }
+    if (!closest_point_cart || !mouse_cart) return;
+    if (closest_dist > 50) return;
+
+    ctx.strokeStyle = "lightblue";
+    ctx.fillStyle = ctx.strokeStyle;
+
+    draw_distance_dashed(ctx, viewer, closest_point_cart, mouse_cart);
+}
+
+export function draw_distance_dashed(ctx: CanvasRenderingContext2D, viewer: Viewer, point_1: Cartesian3, point_2: Cartesian3) {
+    const dash_len = 5;
+    const closest_dist = Cartesian3.distance(point_1, point_2);
+    const p1_scr = viewer.scene.cartesianToCanvasCoordinates(point_1),
+        p2_scr = viewer.scene.cartesianToCanvasCoordinates(point_2);
+    const dist_scr = Cartesian2.distance(p1_scr, p2_scr);
+    const dashes = Math.floor(dist_scr / dash_len / 2);
+    const dir_scr = Cartesian2.subtract(p2_scr, p1_scr, scratchc3_a);
+
+    if (Cartesian2.magnitude(dir_scr) < 1e-5) return;
+    Cartesian2.normalize(dir_scr, dir_scr);
+
+    const half_way = Cartesian2.multiplyByScalar(dir_scr, dist_scr / 2, scratchc3_b);
+    const midpoint = Cartesian2.add(p1_scr, half_way, scratchc3_b);
+    Cartesian2.multiplyByScalar(dir_scr, dash_len, dir_scr);
+    ctx.beginPath();
+    for (let i = 0; i < dashes; i++) {
+        ctx.moveTo(p1_scr.x, p1_scr.y);
+        Cartesian2.add(p1_scr, dir_scr, p1_scr);
+        ctx.lineTo(p1_scr.x, p1_scr.y);
+        Cartesian2.add(p1_scr, dir_scr, p1_scr);
+    }
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.fillText(closest_dist.toFixed(1), midpoint.x, midpoint.y);
 }
