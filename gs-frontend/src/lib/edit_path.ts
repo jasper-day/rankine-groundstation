@@ -55,6 +55,14 @@ export function set_path(new_path: DubinsPath) {
     }
 }
 
+export function get_path_points() {
+    return path_points;
+}
+
+export function set_path_points(new_points: Local2[]) {
+    path_points = new_points;
+}
+
 export function mousedown(viewer: Viewer, e: MouseEvent) {
     if (viewer !== undefined) {
         const cartesian = viewer.camera.pickEllipsoid(
@@ -79,7 +87,7 @@ export function mousedown(viewer: Viewer, e: MouseEvent) {
                     drag_point = idx;
                 }
             }
-            if (drag_point) {
+            if (drag_point != null) {
                 viewer.scene.screenSpaceCameraController.enableInputs = false;
             }
         }
@@ -88,7 +96,7 @@ export function mousedown(viewer: Viewer, e: MouseEvent) {
 }
 
 export function mouseup(viewer: Viewer, _: MouseEvent) {
-    if (drag_point) {
+    if (drag_point != null) {
         if (viewer) viewer.scene.screenSpaceCameraController.enableInputs = true;
         drag_point = null;
     }
@@ -100,7 +108,7 @@ export function mousemove(viewer: Viewer, ctx: CanvasRenderingContext2D, event: 
     const cartesian = viewer.camera.pickEllipsoid(new Cartesian3(mouseX, mouseY), Ellipsoid.WGS84);
     if (cartesian == undefined) return;
     const mouse_local = Local2.fromCartesian(cartesian);
-    if (drag_point) {
+    if (drag_point != null) {
         // we are dragging
         // need to constrain to available drag points
         const p_type = get_point_type(drag_point);

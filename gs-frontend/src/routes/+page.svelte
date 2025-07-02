@@ -64,7 +64,7 @@
     } from "$lib/mav";
     import { Coord_Type, to_czml, type BMFA_Coords } from "$lib/waypoints";
     import { draw_coordinates, draw_mav_history, draw_waypoint_distances } from "$lib/graphics";
-    import { draw_path, get_path, keypress, mousedown, mousemove, mouseup, mouseX, mouseY, set_path } from "$lib/edit_path";
+    import { draw_path, get_path, get_path_points, keypress, mousedown, mousemove, mouseup, mouseX, mouseY, set_path, set_path_points } from "$lib/edit_path";
 
     Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN;
 
@@ -245,13 +245,14 @@
         window.addEventListener("mousemove", on_mousemove);
         window.addEventListener("keypress", on_keypress);
 
-        // let shapes_serialised = localStorage.getItem("path");
-        // if (shapes_serialised) {
-        //     console.log(shapes_serialised);
-        //     set_path(deserialise_path(shapes_serialised));
-        // }
+        
 
-        // setInterval(() => get_path().length > 3 && localStorage.setItem("path", serialise_path(get_path())), 500);
+        let path_points = localStorage.getItem("path_points");
+        if (path_points) {
+            set_path_points(JSON.parse(path_points))
+        }
+
+        setInterval(() => localStorage.setItem("path_points", JSON.stringify(get_path_points())), 500);
     });
 
     function gen_data(x: number): number[] {
