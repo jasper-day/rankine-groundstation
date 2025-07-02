@@ -29,9 +29,7 @@
         UrlTemplateImageryProvider,
         CzmlDataSource,
         Cartographic,
-
         viewerCesium3DTilesInspectorMixin
-
     } from "cesium";
     import {
         Arc,
@@ -44,9 +42,7 @@
         make_arc,
         serialise_path,
         deserialise_path,
-
         path_from_points
-
     } from "$lib/geometry";
     import { draw_horizon } from "$lib/pfd";
     import "cesium/Build/Cesium/Widgets/widgets.css";
@@ -67,7 +63,19 @@
     } from "$lib/mav";
     import { Coord_Type, to_czml, type BMFA_Coords } from "$lib/waypoints";
     import { draw_coordinates, draw_mav_history, draw_waypoint_distances } from "$lib/graphics";
-    import { draw_path, get_path, get_path_points, keypress, mousedown, mousemove, mouseup, mouseX, mouseY, set_path, set_path_points } from "$lib/edit_path";
+    import {
+        draw_path,
+        get_path,
+        get_path_points,
+        keypress,
+        mousedown,
+        mousemove,
+        mouseup,
+        mouseX,
+        mouseY,
+        set_path,
+        set_path_points
+    } from "$lib/edit_path";
     import { download_string, export_waypoints, get_dubins_wps } from "$lib/mission";
 
     Ion.defaultAccessToken = import.meta.env.VITE_CESIUM_TOKEN;
@@ -100,7 +108,6 @@
     const scratchc3_b: Cartesian3 = new Cartesian3();
 
     onMount(() => {
-        
         // Initialize the Cesium Viewer in the HTML element with the `cesiumContainer` ID.
         viewer = new Viewer("cesiumContainer", {
             terrain: Terrain.fromWorldTerrain(),
@@ -178,7 +185,6 @@
                 draw_mav_history(mav_history, mav_data, plan, viewer, ctx, curr_heading);
                 coordinates && geofence && draw_coordinates(coordinates, ctx, viewer, geofence);
                 waypoints && draw_waypoint_distances(ctx, viewer, waypoints, mouseX, mouseY);
-                
             }
             if (pfd_ctx) {
                 let pitch = 0;
@@ -223,7 +229,7 @@
         // Chrome doesn't support mouse events
         function on_mousedown(e: MouseEvent) {
             if (viewer == undefined) return;
-            
+
             mousedown(viewer, e);
         }
 
@@ -238,7 +244,7 @@
         }
 
         function on_keypress(e: KeyboardEvent) {
-            if (viewer==undefined || !ctx) return;
+            if (viewer == undefined || !ctx) return;
             keypress(viewer, ctx, e);
         }
 
@@ -249,10 +255,20 @@
 
         let path_points = localStorage.getItem("path_points");
         if (path_points) {
-            set_path_points(JSON.parse(path_points).map((l: Local2) => new Local2(l.x, l.y)));
+            set_path_points(JSON.parse(path_points).map((l: { x: number; y: number }) => new Local2(l.x, l.y)));
         }
 
-        setInterval(() => localStorage.setItem("path_points", JSON.stringify(get_path_points())), 500);
+        setInterval(() => {
+            localStorage.setItem(
+                "path_points",
+                JSON.stringify(
+                    get_path_points().map((l) => {
+                        return { x: l.x, y: l.y };
+                    })
+                )
+            );
+            console.log(JSON.stringify(get_path_points()));
+        }, 5000);
     });
 
     function gen_data(x: number): number[] {
@@ -296,7 +312,7 @@
 </div>
 <canvas id="canvas" bind:this={canvas}></canvas>
 <div id="cesiumContainer"></div>
-<div class="h-94 fixed bottom-4 right-4 z-50 w-80 overflow-hidden">
+<div class="fixed right-4 bottom-4 z-50 h-94 w-80 overflow-hidden">
     <div class="rounded bg-black/70" style="height: 100%">
         <div id="arm-button" class="grid-columns-3 border-b border-white/20">
             <button class="btn btn-gray" on:click={enable_arm}>Arm</button>

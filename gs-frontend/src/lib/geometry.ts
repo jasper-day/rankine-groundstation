@@ -543,7 +543,6 @@ export function path_from_points(points: Local2[]) {
         if (!last_line) break; // guaranteed not to happen
         // Add circular and line segment
         // https://en.wikipedia.org/wiki/Tangent_lines_to_circles#With_analytic_geometry
-        console.log(typeof(a));
         let ab = a.sub(b), cb = c.sub(b);
         let r = cb.mag();
         let d0_squared = ab.mag2();
